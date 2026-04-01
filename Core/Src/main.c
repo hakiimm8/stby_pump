@@ -115,8 +115,8 @@ typedef struct
 #define APP_MODE APP_MODE_DUAL_PUMP_CFG
 
 /* Input polarities: set 1 if active high, 0 if active low */
-#define PRESSURE_ACTIVE_LEVEL 1U
-#define RPM_ACTIVE_LEVEL 1U
+#define PRESSURE_ACTIVE_LEVEL 0U
+#define RPM_ACTIVE_LEVEL 0U
 #define AC_ACTIVE_LEVEL 1U
 #define SELECTOR_ACTIVE_LEVEL 1U
 #define ACK_LT_ACTIVE_LEVEL 1U
@@ -941,13 +941,13 @@ static void UpdateOutputs(void)
        Q3 = Pump 2 output
     */
 
-    /* Relay byte on U1 */
+    /* Relay board wiring is reversed: QA..QH drive Q8..Q1 through the ULN stage. */
     if (g_out.failure_ams)
-        relay_byte |= (1U << 0); /* Q1 = Failure AMS */
+        relay_byte |= (1U << 7); /* Q1 = Failure AMS */
     if (g_out.pump1_cmd)
-        relay_byte |= (1U << 1); /* Q2 = Output pump 1 */
+        relay_byte |= (1U << 6); /* Q2 = Output pump 1 */
     if (g_out.pump2_cmd)
-        relay_byte |= (1U << 2); /* Q3 = Output pump 2 */
+        relay_byte |= (1U << 5); /* Q3 = Output pump 2 */
 
     /* U3 : IND1..IND8 */
     if (g_out.ind2_p1_ready)
@@ -1142,6 +1142,9 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SR_OE_GPIO_Port, SR_OE_Pin, GPIO_PIN_SET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(AC1_IN_GPIO_Port, AC1_IN_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pins : SYS_LED1_Pin SYS_LED2_Pin */
   GPIO_InitStruct.Pin = SYS_LED1_Pin|SYS_LED2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -1188,12 +1191,19 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(I3_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I4_Pin I5_Pin I6_Pin I7_Pin
-                           I8_Pin AC1_IN_Pin AC2_IN_Pin */
+                           I8_Pin AC2_IN_Pin */
   GPIO_InitStruct.Pin = I4_Pin|I5_Pin|I6_Pin|I7_Pin
-                          |I8_Pin|AC1_IN_Pin|AC2_IN_Pin;
+                          |I8_Pin|AC2_IN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : AC1_IN_Pin */
+  GPIO_InitStruct.Pin = AC1_IN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(AC1_IN_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
