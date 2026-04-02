@@ -19,25 +19,30 @@ In dual pump mode:
 
 The current source is configured for dual pump mode in [`Core/Src/main.c`](Core/Src/main.c).
 
-## Control Sequence
+## Control Logic
+
+Current control logic in `Core/Src/main.c` uses these meanings:
+
+- `AC1_IN` / `AC2_IN` = selected remote pump is available for module control
+- `Pressure` input = low-pressure indication on the engine
+- `RPM` input = engine can sustain itself without the standby pump
 
 For the selected pump:
 
-1. Low pressure creates demand
-2. Pump output turns on
-3. AC feedback must appear within `T_AC_TIMEOUT_MS`
-4. RPM feedback must appear within `T_RPM_TIMEOUT_MS`
-5. Pressure must recover within `T_PRESSURE_RECOVER_MS`
-6. If pressure recovers, the pump remains on until demand clears
-7. If AC or RPM is lost while running, the pump stops and the alarm latches
+1. A pump run request exists when `pressure_low` is active or `rpm` is inactive
+2. The selected pump may run only if its `ACx_IN` ready input is active
+3. If a run request exists while the selected pump is not ready, alarm latches and `Failure AMS` turns on
+4. The standby pump stops only when pressure low is inactive and RPM is active
+5. `System ready` means no latched alarm
 
 ## Alarm / ACK / Lamp Test
 
 - Alarm is latched
 - `ACK_LT` short press clears the alarm latch
-- `ACK_LT` long press activates lamp test
+- `ACK_LT` long press activates lamp test and also clears the alarm latch
 - Lamp test affects display LEDs only
 - Alarm indication blinks at 1 Hz
+- Current implementation performs ACK on the press edge, so long press = ACK + lamp test
 
 ## Hardware Summary
 
@@ -54,9 +59,10 @@ Shift register chain:
 
 Relay/DC mapping:
 
-- Relay bit 0 = `Failure AMS`
-- Relay bit 1 = `Pump 1 command`
-- Relay bit 2 = `Pump 2 command`
+- Relay bit 7 = `Failure AMS`
+- Relay bit 6 = `Pump 1 command`
+- Relay bit 5 = `Pump 2 command`
+- Relay bits are reversed at the board interface because the relay `74HC595` / `ULN2803A` path lands on `Q8..Q1`
 
 Inputs:
 
@@ -64,18 +70,18 @@ Inputs:
 - `I5` = RPM switch pump 1
 - `I6` = Pressure switch pump 2
 - `I7` = RPM switch pump 2
-- `AC1_IN` = AC feedback pump 1
-- `AC2_IN` = AC feedback pump 2
-- `ACK_LT` = `PH0`
+- `I8 / PB7` = `ACK_LT`
+- `AC1_IN` = pump 1 ready / remote available
+- `AC2_IN` = pump 2 ready / remote available
 - `SEL_P1` = `PA10`
 - `SEL_P2` = `PA11`
 - `SW_COMMON` = `PH1`
 
 Switch wiring:
 
-- `PH1` drives the common source for selector and ACK wiring
-- `PH0`, `PA10`, and `PA11` use pull-down configuration
-- Selector and ACK logic are active high
+- `PH1` drives the common source for selector wiring
+- `PA10` and `PA11` use pull-down configuration and are active high
+- `ACK_LT` on `PB7` is active low and is expected to use external pull-up hardware
 
 ## GPIO Notes
 
@@ -84,7 +90,8 @@ Important generated GPIO startup states:
 - `SW_COMMON` (`PH1`) starts high
 - `SR_LATCH` (`PA4`) starts low
 - `SR_OE` (`PA6`) starts high
-- `ACK_LT`, `SEL_P1`, and `SEL_P2` are configured with pull-downs
+- `SEL_P1` and `SEL_P2` are configured with pull-downs
+- `ACK_LT` on `PB7` is treated as an active-low input
 
 ## LED Mapping
 
@@ -137,15 +144,16 @@ Hardware validation is still required for:
 - ACK versus lamp test timing
 - Shift register byte order on the real PCB
 - Relay and LED bit mapping on hardware
-- AC timeout, RPM timeout, and pressure recovery timeout behavior
+- `AC1_IN` / `AC2_IN` ready behavior
+- run/stop behavior from pressure and RPM inputs
 
 ## Bench Checklist
 
 - Verify `OFF / PUMP 1 / PUMP 2 / INVALID` selector decoding
 - Verify short press `ACK_LT` clears the latched alarm
-- Verify long press `ACK_LT` lights the display LEDs only
+- Verify long press `ACK_LT` clears alarm and lights the display LEDs
 - Verify `SR_OE` prevents relay glitching during shift register writes
 - Verify only one pump output can be active at a time
-- Verify startup with demand already present
+- Verify pump starts on low pressure or inactive RPM only when the selected pump is ready
+- Verify pump stops only when pressure low clears and RPM is active
 - Verify alarm latch and `Failure AMS` output behavior
-

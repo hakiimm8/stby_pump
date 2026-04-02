@@ -37,7 +37,6 @@ This file is intended to capture project knowledge that is easy to lose between 
 
 These are currently treated as active high in `Core/Src/main.c`:
 
-- `ACK_LT`
 - `SEL_P1`
 - `SEL_P2`
 - `AC1_IN`
@@ -47,6 +46,7 @@ These are currently treated as active high in `Core/Src/main.c`:
 
 These are currently treated as active low in `Core/Src/main.c`:
 
+- `ACK_LT`
 - `IN Pressure switch pump 1`
 - `IN RPM switch pump 1`
 - `IN Pressure switch pump 2`
@@ -54,7 +54,7 @@ These are currently treated as active low in `Core/Src/main.c`:
 
 Reason:
 
-- pressure and RPM inputs use pull-up resistors
+- ACK, pressure, and RPM inputs use pull-up resistors
 - active state is the low state
 
 Current polarity defines:
@@ -63,12 +63,11 @@ Current polarity defines:
 - `RPM_ACTIVE_LEVEL = 0U`
 - `AC_ACTIVE_LEVEL = 1U`
 - `SELECTOR_ACTIVE_LEVEL = 1U`
-- `ACK_LT_ACTIVE_LEVEL = 1U`
+- `ACK_LT_ACTIVE_LEVEL = 0U`
 
 ## Selector Wiring
 
 - `PH1` is used as switch common source
-- `PH0` = `ACK_LT`
 - `PA10` = `SEL_P1`
 - `PA11` = `SEL_P2`
 
@@ -82,7 +81,7 @@ Expected selector decode:
 GPIO assumptions:
 
 - `PH1` starts high
-- `PH0`, `PA10`, `PA11` use pull-down configuration
+- `PA10`, `PA11` use pull-down configuration
 
 ## DC / Pump IO Mapping
 
@@ -95,6 +94,7 @@ GPIO assumptions:
 - `I5` = IN RPM switch pump 1
 - `I6` = IN Pressure switch pump 2
 - `I7` = IN RPM switch pump 2
+- `I8` = ACK / Lamp Test
 
 ### MCU direct input pins
 
@@ -102,6 +102,7 @@ GPIO assumptions:
 - `I5` -> `PB4`
 - `I6` -> `PB5`
 - `I7` -> `PB6`
+- `I8` -> `PB7`
 - `AC1_IN` -> `PB8`
 - `AC2_IN` -> `PB9`
 
@@ -202,8 +203,8 @@ For LED bank 2:
 
 Current logic meaning:
 
-- `System ready` = always on
-- `Pump ready` = no alarm latched
+- `System ready` = no latched alarm
+- `Pump ready` = `ACx_IN` ready input is active
 - `Pump ON` = pump command active
 - `Pump standby` = opposite pump selected in dual mode
 - `Pressure low` = demand active
@@ -211,35 +212,27 @@ Current logic meaning:
 
 ## State Machine Notes
 
-Pump start sequence for selected pump:
+Current run/stop rules for the selected pump:
 
-1. demand detected
-2. command pump ON
-3. wait AC feedback
-4. wait RPM feedback
-5. wait pressure recovery
-6. continue running until demand disappears
-7. stop and latch alarm on failure
+1. run request exists when `pressure_low` is active or `rpm` is inactive
+2. pump may run only if `ACx_IN` for that pump is active
+3. if run is requested while the selected pump is not ready, alarm latches
+4. pump stops only when `pressure_low` is inactive and `rpm` is active
 
 Fault causes include:
 
-- AC timeout
-- RPM timeout
-- AC lost while running
-- RPM lost while running
-- pressure recovery timeout
+- run requested while selected pump is not ready
 - invalid selector state
 
 ACK/Lamp test behavior:
 
 - short press = ACK
-- long press = lamp test
+- long press = ACK + lamp test
 
 ## Known Build Status
 
 - project builds successfully with STM32CubeIDE bundled GNU toolchain
-- one non-blocking warning remains:
-  - `RunSinglePumpLogic()` unused while dual mode is selected
+- no blocking build warnings were observed in the latest verified build
 
 ## Validation Still Required
 
@@ -250,10 +243,8 @@ Bench validation is still required for:
 - lamp test long press behavior
 - real shift-register relay mapping
 - real LED mapping
-- AC timeout
-- RPM timeout
-- pressure recovery timeout
-- loss of AC or RPM while running
+- `AC1_IN` / `AC2_IN` ready behavior
+- run and stop behavior from pressure / RPM inputs
 
 ## Datasheets Provided
 
@@ -264,4 +255,3 @@ Reference files shared during review:
 - `stm32f407vgt6 datasheet.pdf`
 
 These were used as reference for pin/function reasoning, but the board schematic remains the source of truth for final signal mapping.
-
