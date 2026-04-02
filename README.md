@@ -14,7 +14,7 @@ In dual pump mode:
 - The operator selects `OFF`, `PUMP 1`, or `PUMP 2`
 - Only one pump may run at a time
 - There is no automatic transfer
-- A fault latches the alarm and activates the `Failure AMS` output
+- A fault latches the panel alarm
 - The operator must acknowledge the alarm and manually select another pump if needed
 
 The current source is configured for dual pump mode in [`Core/Src/main.c`](Core/Src/main.c).
@@ -31,9 +31,10 @@ For the selected pump:
 
 1. A pump run request exists when `pressure_low` is active or `rpm` is inactive
 2. The selected pump may run only if its `ACx_IN` ready input is active
-3. If a run request exists while the selected pump is not ready, alarm latches and `Failure AMS` turns on
+3. If a run request exists while the selected pump is not ready, alarm latches and the pump stays off
 4. The standby pump stops only when pressure low is inactive and RPM is active
 5. `System ready` means no latched alarm
+6. If a pump is running and pressure stays low for `10 s`, the controller stops the pump, latches alarm, and turns on `Failure AMS` until `ACK`
 
 ## Alarm / ACK / Lamp Test
 
@@ -82,6 +83,7 @@ Switch wiring:
 - `PH1` drives the common source for selector wiring
 - `PA10` and `PA11` use pull-down configuration and are active high
 - `ACK_LT` on `PB7` is active low and is expected to use external pull-up hardware
+- `AC1_IN` / `AC2_IN` are active low and are expected to use external pull-up hardware
 
 ## GPIO Notes
 
@@ -145,6 +147,7 @@ Hardware validation is still required for:
 - Shift register byte order on the real PCB
 - Relay and LED bit mapping on hardware
 - `AC1_IN` / `AC2_IN` ready behavior
+- pressure-timeout `Failure AMS` behavior
 - run/stop behavior from pressure and RPM inputs
 
 ## Bench Checklist
@@ -156,4 +159,5 @@ Hardware validation is still required for:
 - Verify only one pump output can be active at a time
 - Verify pump starts on low pressure or inactive RPM only when the selected pump is ready
 - Verify pump stops only when pressure low clears and RPM is active
-- Verify alarm latch and `Failure AMS` output behavior
+- Verify alarm latch behavior for not-ready / invalid selector faults
+- Verify `Failure AMS` only turns on after a `10 s` low-pressure timeout while the pump is running

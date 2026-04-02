@@ -39,14 +39,14 @@ These are currently treated as active high in `Core/Src/main.c`:
 
 - `SEL_P1`
 - `SEL_P2`
-- `AC1_IN`
-- `AC2_IN`
 
 ### Active low inputs
 
 These are currently treated as active low in `Core/Src/main.c`:
 
 - `ACK_LT`
+- `AC1_IN`
+- `AC2_IN`
 - `IN Pressure switch pump 1`
 - `IN RPM switch pump 1`
 - `IN Pressure switch pump 2`
@@ -61,7 +61,7 @@ Current polarity defines:
 
 - `PRESSURE_ACTIVE_LEVEL = 0U`
 - `RPM_ACTIVE_LEVEL = 0U`
-- `AC_ACTIVE_LEVEL = 1U`
+- `AC_ACTIVE_LEVEL = 0U`
 - `SELECTOR_ACTIVE_LEVEL = 1U`
 - `ACK_LT_ACTIVE_LEVEL = 0U`
 
@@ -209,6 +209,7 @@ Current logic meaning:
 - `Pump standby` = opposite pump selected in dual mode
 - `Pressure low` = demand active
 - `Standby alarm` = latched alarm blinking
+- `Failure AMS` = live control uses it only for the `10 s` pressure-timeout fault; output test still drives it in sequence
 
 ## State Machine Notes
 
@@ -216,8 +217,10 @@ Current run/stop rules for the selected pump:
 
 1. run request exists when `pressure_low` is active or `rpm` is inactive
 2. pump may run only if `ACx_IN` for that pump is active
-3. if run is requested while the selected pump is not ready, alarm latches
+3. if run is requested while the selected pump is not ready, alarm latches and the pump stays off
 4. pump stops only when `pressure_low` is inactive and `rpm` is active
+5. if a running pump sees `pressure_low` stay active for `10 s`, the pump stops, alarm latches, and `Failure AMS` turns on
+6. ACK clears the latched alarm and returns the module to normal operation again
 
 Fault causes include:
 
