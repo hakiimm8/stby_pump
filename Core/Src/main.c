@@ -147,6 +147,7 @@ typedef struct
 /* Timing */
 #define LOOP_DELAY_MS 20U
 #define T_DEBOUNCE_MS 200U
+#define T_ACK_DEBOUNCE_MS 50U
 #define T_AC_TIMEOUT_MS 1500U
 #define T_RPM_TIMEOUT_MS 3000U
 #define T_PRESSURE_RECOVER_MS 30000U
@@ -227,7 +228,7 @@ static void SR_Write24(uint8_t u1, uint8_t u2, uint8_t u3);
 static void UpdateOutputs(void);
 
 static uint8_t NormalizeLevel(uint8_t raw_active, uint8_t active_level);
-static void DebounceBit(uint8_t raw, uint8_t *db, uint32_t *tick);
+static void DebounceBit(uint8_t raw, uint8_t *db, uint32_t *tick, uint32_t debounce_ms);
 
 static void ClearOutputs(void);
 static void RunControlLogic(void);
@@ -267,13 +268,13 @@ static uint8_t NormalizeLevel(uint8_t raw_active, uint8_t active_level)
     return active_level ? raw_active : (uint8_t)!raw_active;
 }
 
-static void DebounceBit(uint8_t raw, uint8_t *db, uint32_t *tick)
+static void DebounceBit(uint8_t raw, uint8_t *db, uint32_t *tick, uint32_t debounce_ms)
 {
     uint32_t now = HAL_GetTick();
 
     if (raw != *db)
     {
-        if ((now - *tick) >= T_DEBOUNCE_MS)
+        if ((now - *tick) >= debounce_ms)
         {
             *db = raw;
             *tick = now;
@@ -316,15 +317,15 @@ static void ProcessInputs(void)
 {
     uint32_t now = HAL_GetTick();
 
-    DebounceBit(g_raw.pressure_p1_raw, &db_pressure_p1, &db_tick_pressure_p1);
-    DebounceBit(g_raw.rpm_p1_raw, &db_rpm_p1, &db_tick_rpm_p1);
-    DebounceBit(g_raw.pressure_p2_raw, &db_pressure_p2, &db_tick_pressure_p2);
-    DebounceBit(g_raw.rpm_p2_raw, &db_rpm_p2, &db_tick_rpm_p2);
-    DebounceBit(g_raw.ac_p1_raw, &db_ac_p1, &db_tick_ac_p1);
-    DebounceBit(g_raw.ac_p2_raw, &db_ac_p2, &db_tick_ac_p2);
-    DebounceBit(g_raw.sel_p1_raw, &db_sel_p1, &db_tick_sel_p1);
-    DebounceBit(g_raw.sel_p2_raw, &db_sel_p2, &db_tick_sel_p2);
-    DebounceBit(g_raw.ack_lt_raw, &db_ack_lt, &db_tick_ack_lt);
+    DebounceBit(g_raw.pressure_p1_raw, &db_pressure_p1, &db_tick_pressure_p1, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.rpm_p1_raw, &db_rpm_p1, &db_tick_rpm_p1, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.pressure_p2_raw, &db_pressure_p2, &db_tick_pressure_p2, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.rpm_p2_raw, &db_rpm_p2, &db_tick_rpm_p2, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.ac_p1_raw, &db_ac_p1, &db_tick_ac_p1, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.ac_p2_raw, &db_ac_p2, &db_tick_ac_p2, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.sel_p1_raw, &db_sel_p1, &db_tick_sel_p1, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.sel_p2_raw, &db_sel_p2, &db_tick_sel_p2, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.ack_lt_raw, &db_ack_lt, &db_tick_ack_lt, T_ACK_DEBOUNCE_MS);
 
     g_in.pressure_p1 = NormalizeLevel(db_pressure_p1, PRESSURE_ACTIVE_LEVEL);
     g_in.rpm_p1 = NormalizeLevel(db_rpm_p1, RPM_ACTIVE_LEVEL);
