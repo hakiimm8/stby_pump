@@ -142,7 +142,7 @@ typedef struct
 #define RPM_ACTIVE_LEVEL 0U
 #define AC_ACTIVE_LEVEL 1U
 #define SELECTOR_ACTIVE_LEVEL 1U
-#define ACK_LT_ACTIVE_LEVEL 1U
+#define ACK_LT_ACTIVE_LEVEL 0U
 
 /* Timing */
 #define LOOP_DELAY_MS 20U
@@ -308,7 +308,7 @@ static void ReadRawInputs(void)
     g_raw.ac_p1_raw = PIN_IS_ACTIVE(AC1_IN_GPIO_Port, AC1_IN_Pin);
     g_raw.ac_p2_raw = PIN_IS_ACTIVE(AC2_IN_GPIO_Port, AC2_IN_Pin);
 
-    g_raw.ack_lt_raw = PIN_IS_ACTIVE(ACK_LT_GPIO_Port, ACK_LT_Pin);
+    g_raw.ack_lt_raw = PIN_IS_ACTIVE(I8_GPIO_Port, I8_Pin);
     g_raw.sel_p1_raw = PIN_IS_ACTIVE(SEL_P1_GPIO_Port, SEL_P1_Pin);
     g_raw.sel_p2_raw = PIN_IS_ACTIVE(SEL_P2_GPIO_Port, SEL_P2_Pin);
 }
