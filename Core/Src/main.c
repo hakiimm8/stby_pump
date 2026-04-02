@@ -236,9 +236,9 @@ static MAYBE_UNUSED void RunDualPumpLogic(void);
 static MAYBE_UNUSED void RunBypassDualLogic(void);
 static MAYBE_UNUSED void RunOutputTestProgram(void);
 static void RunPumpChannel(PumpChannel_t *channel,
-                           uint8_t demand_active,
-                           uint8_t ac_feedback,
-                           uint8_t rpm_feedback,
+                           uint8_t pressure_low,
+                           uint8_t ac_ready,
+                           uint8_t rpm_active,
                            uint8_t *pump_cmd);
 
 static void StopAllPumps(void);
@@ -248,6 +248,7 @@ static void PrimeDebouncedInputs(void);
 
 static uint8_t PressureDemandActive(void);
 static uint8_t PressureDemandForPump(SelectorState_t pump);
+static uint8_t PumpRunRequest(uint8_t pressure_low, uint8_t rpm_active);
 static uint8_t SelectedPumpIsP1(void);
 static uint8_t SelectedPumpIsP2(void);
 
@@ -356,6 +357,8 @@ static void ProcessInputs(void)
         if ((ack_now == 1U) && (g_last_ack_raw == 0U))
         {
             g_ack_press_tick = now;
+            g_in.ack_short = 1U; /* ACK acts immediately on button press */
+            g_lamp_test_active = 0U;
         }
 
         if (ack_now == 1U)
@@ -367,14 +370,6 @@ static void ProcessInputs(void)
         }
         else
         {
-            if (g_last_ack_raw == 1U)
-            {
-                uint32_t press_time = now - g_ack_press_tick;
-                if (press_time < T_ACK_LONGPRESS_MS)
-                {
-                    g_in.ack_short = 1U;
-                }
-            }
             g_lamp_test_active = 0U;
         }
 
@@ -504,6 +499,11 @@ static uint8_t PressureDemandForPump(SelectorState_t pump)
     return 0U;
 }
 
+static uint8_t PumpRunRequest(uint8_t pressure_low, uint8_t rpm_active)
+{
+    return (uint8_t)(pressure_low || !rpm_active);
+}
+
 static uint8_t PressureDemandActive(void)
 {
 #if (APP_MODE == APP_MODE_SINGLE_PUMP_CFG)
@@ -537,11 +537,7 @@ static uint8_t SelectedPumpIsP2(void)
 
 static uint8_t P1Ready(void)
 {
-#if (APP_MODE == APP_MODE_SINGLE_PUMP_CFG)
-    return (g_alarm_latched == 0U);
-#else
-    return (g_alarm_latched == 0U);
-#endif
+    return g_in.ac_p1;
 }
 
 static uint8_t P2Ready(void)
@@ -549,17 +545,17 @@ static uint8_t P2Ready(void)
 #if (APP_MODE == APP_MODE_SINGLE_PUMP_CFG)
     return 0U;
 #else
-    return (g_alarm_latched == 0U);
+    return g_in.ac_p2;
 #endif
 }
 
 static void RunPumpChannel(PumpChannel_t *channel,
-                           uint8_t demand_active,
-                           uint8_t ac_feedback,
-                           uint8_t rpm_feedback,
+                           uint8_t pressure_low,
+                           uint8_t ac_ready,
+                           uint8_t rpm_active,
                            uint8_t *pump_cmd)
 {
-    uint32_t now = HAL_GetTick();
+    uint8_t run_request = PumpRunRequest(pressure_low, rpm_active);
 
     if (g_in.ack_short)
     {
@@ -574,86 +570,40 @@ static void RunPumpChannel(PumpChannel_t *channel,
     {
     case PUMP_STATE_OFF:
         *pump_cmd = 0U;
-        if ((channel->alarm_latched == 0U) && demand_active)
+        if ((channel->alarm_latched == 0U) && run_request)
         {
-            *pump_cmd = 1U;
-            EnterPumpChannelState(channel, PUMP_STATE_START_WAIT_AC);
+            if (ac_ready)
+            {
+                *pump_cmd = 1U;
+                EnterPumpChannelState(channel, PUMP_STATE_RUNNING);
+            }
+            else
+            {
+                channel->alarm_latched = 1U;
+                EnterPumpChannelState(channel, PUMP_STATE_FAULT);
+            }
         }
         break;
 
     case PUMP_STATE_START_WAIT_AC:
-        *pump_cmd = 1U;
-        if (!demand_active)
-        {
-            *pump_cmd = 0U;
-            EnterPumpChannelState(channel, PUMP_STATE_OFF);
-        }
-        else if (ac_feedback)
-        {
-            EnterPumpChannelState(channel, PUMP_STATE_START_WAIT_RPM);
-        }
-        else if ((now - channel->state_tick) >= T_AC_TIMEOUT_MS)
-        {
-            *pump_cmd = 0U;
-            channel->alarm_latched = 1U;
-            EnterPumpChannelState(channel, PUMP_STATE_FAULT);
-        }
-        break;
-
     case PUMP_STATE_START_WAIT_RPM:
-        *pump_cmd = 1U;
-        if (!demand_active)
-        {
-            *pump_cmd = 0U;
-            EnterPumpChannelState(channel, PUMP_STATE_OFF);
-        }
-        else if (!ac_feedback)
-        {
-            *pump_cmd = 0U;
-            channel->alarm_latched = 1U;
-            EnterPumpChannelState(channel, PUMP_STATE_FAULT);
-        }
-        else if (rpm_feedback)
-        {
-            EnterPumpChannelState(channel, PUMP_STATE_RUN_WAIT_PRESSURE_RECOVERY);
-        }
-        else if ((now - channel->state_tick) >= T_RPM_TIMEOUT_MS)
-        {
-            *pump_cmd = 0U;
-            channel->alarm_latched = 1U;
-            EnterPumpChannelState(channel, PUMP_STATE_FAULT);
-        }
-        break;
-
     case PUMP_STATE_RUN_WAIT_PRESSURE_RECOVERY:
-        *pump_cmd = 1U;
-        if (!ac_feedback || !rpm_feedback)
-        {
-            *pump_cmd = 0U;
-            channel->alarm_latched = 1U;
-            EnterPumpChannelState(channel, PUMP_STATE_FAULT);
-        }
-        else if (!demand_active)
-        {
-            EnterPumpChannelState(channel, PUMP_STATE_RUNNING);
-        }
-        else if ((now - channel->state_tick) >= T_PRESSURE_RECOVER_MS)
-        {
-            *pump_cmd = 0U;
-            channel->alarm_latched = 1U;
-            EnterPumpChannelState(channel, PUMP_STATE_FAULT);
-        }
-        break;
-
     case PUMP_STATE_RUNNING:
-        *pump_cmd = 1U;
-        if (!ac_feedback || !rpm_feedback)
+        if (run_request)
         {
-            *pump_cmd = 0U;
-            channel->alarm_latched = 1U;
-            EnterPumpChannelState(channel, PUMP_STATE_FAULT);
+            if (ac_ready)
+            {
+                *pump_cmd = 1U;
+                EnterPumpChannelState(channel, PUMP_STATE_RUNNING);
+            }
+            else
+            {
+                *pump_cmd = 0U;
+                channel->alarm_latched = 1U;
+                EnterPumpChannelState(channel, PUMP_STATE_FAULT);
+            }
         }
-        else if (!demand_active)
+        else
         {
             *pump_cmd = 0U;
             EnterPumpChannelState(channel, PUMP_STATE_OFF);
@@ -669,7 +619,7 @@ static void RunPumpChannel(PumpChannel_t *channel,
 
 static void RunSinglePumpLogic(void)
 {
-    uint32_t now = HAL_GetTick();
+    uint8_t run_request = PumpRunRequest(g_in.pressure_p1, g_in.rpm_p1);
 
     if (g_in.ack_short)
     {
@@ -684,91 +634,40 @@ static void RunSinglePumpLogic(void)
     {
     case PUMP_STATE_OFF:
         StopAllPumps();
-        if (PressureDemandActive())
+        if (run_request)
         {
-            g_out.pump1_cmd = 1U;
-            EnterState(PUMP_STATE_START_WAIT_AC);
+            if (g_in.ac_p1)
+            {
+                g_out.pump1_cmd = 1U;
+                EnterState(PUMP_STATE_RUNNING);
+            }
+            else
+            {
+                g_alarm_latched = 1U;
+                EnterState(PUMP_STATE_FAULT);
+            }
         }
         break;
 
     case PUMP_STATE_START_WAIT_AC:
-        g_out.pump1_cmd = 1U;
-        if (!PressureDemandActive())
-        {
-            StopAllPumps();
-            EnterState(PUMP_STATE_OFF);
-        }
-        else if (g_in.ac_p1)
-        {
-            EnterState(PUMP_STATE_START_WAIT_RPM);
-        }
-        else if ((now - g_state_tick) >= T_AC_TIMEOUT_MS)
-        {
-            StopAllPumps();
-            g_alarm_latched = 1U;
-            EnterState(PUMP_STATE_FAULT);
-        }
-        break;
-
     case PUMP_STATE_START_WAIT_RPM:
-        g_out.pump1_cmd = 1U;
-        if (!PressureDemandActive())
-        {
-            StopAllPumps();
-            EnterState(PUMP_STATE_OFF);
-        }
-        else if (!g_in.ac_p1)
-        {
-            StopAllPumps();
-            g_alarm_latched = 1U;
-            EnterState(PUMP_STATE_FAULT);
-        }
-        else if (g_in.rpm_p1)
-        {
-            EnterState(PUMP_STATE_RUN_WAIT_PRESSURE_RECOVERY);
-        }
-        else if ((now - g_state_tick) >= T_RPM_TIMEOUT_MS)
-        {
-            StopAllPumps();
-            g_alarm_latched = 1U;
-            EnterState(PUMP_STATE_FAULT);
-        }
-        break;
-
     case PUMP_STATE_RUN_WAIT_PRESSURE_RECOVERY:
-        g_out.pump1_cmd = 1U;
-        if (!g_in.ac_p1 || !g_in.rpm_p1)
-        {
-            StopAllPumps();
-            g_alarm_latched = 1U;
-            EnterState(PUMP_STATE_FAULT);
-        }
-        else if (!PressureDemandActive())
-        {
-            StopAllPumps();
-            EnterState(PUMP_STATE_OFF);
-        }
-        else if (!g_in.pressure_p1)
-        {
-            EnterState(PUMP_STATE_RUNNING);
-        }
-        else if ((now - g_state_tick) >= T_PRESSURE_RECOVER_MS)
-        {
-            StopAllPumps();
-            g_alarm_latched = 1U;
-            EnterState(PUMP_STATE_FAULT);
-        }
-        break;
-
     case PUMP_STATE_RUNNING:
-        g_out.pump1_cmd = 1U;
-        if (!g_in.ac_p1 || !g_in.rpm_p1)
+        if (run_request)
         {
-            StopAllPumps();
-            g_alarm_latched = 1U;
-            EnterState(PUMP_STATE_FAULT);
+            if (g_in.ac_p1)
+            {
+                g_out.pump1_cmd = 1U;
+                EnterState(PUMP_STATE_RUNNING);
+            }
+            else
+            {
+                StopAllPumps();
+                g_alarm_latched = 1U;
+                EnterState(PUMP_STATE_FAULT);
+            }
         }
-        else if (!PressureDemandActive())
+        else
         {
             StopAllPumps();
             EnterState(PUMP_STATE_OFF);
@@ -785,8 +684,6 @@ static void RunSinglePumpLogic(void)
 
 static void RunDualPumpLogic(void)
 {
-    uint32_t now = HAL_GetTick();
-
     if (g_in.ack_short)
     {
         g_alarm_latched = 0U;
@@ -825,196 +722,62 @@ static void RunDualPumpLogic(void)
         StopAllPumps();
         if (g_in.selector == SELECTOR_P1)
         {
-            if (g_in.pressure_p1)
+            if (PumpRunRequest(g_in.pressure_p1, g_in.rpm_p1))
             {
                 g_active_pump = SELECTOR_P1;
-                g_out.pump1_cmd = 1U;
-                EnterState(PUMP_STATE_START_WAIT_AC);
+                if (g_in.ac_p1)
+                {
+                    g_out.pump1_cmd = 1U;
+                    EnterState(PUMP_STATE_RUNNING);
+                }
+                else
+                {
+                    g_alarm_latched = 1U;
+                    EnterState(PUMP_STATE_FAULT);
+                }
             }
         }
         else if (g_in.selector == SELECTOR_P2)
         {
-            if (g_in.pressure_p2)
+            if (PumpRunRequest(g_in.pressure_p2, g_in.rpm_p2))
             {
                 g_active_pump = SELECTOR_P2;
-                g_out.pump2_cmd = 1U;
-                EnterState(PUMP_STATE_START_WAIT_AC);
+                if (g_in.ac_p2)
+                {
+                    g_out.pump2_cmd = 1U;
+                    EnterState(PUMP_STATE_RUNNING);
+                }
+                else
+                {
+                    g_alarm_latched = 1U;
+                    EnterState(PUMP_STATE_FAULT);
+                }
             }
         }
         break;
 
     case PUMP_STATE_START_WAIT_AC:
-        if (SelectedPumpIsP1())
-        {
-            g_out.pump1_cmd = 1U;
-            g_out.pump2_cmd = 0U;
-
-            if (!g_in.pressure_p1)
-            {
-                StopAllPumps();
-                EnterState(PUMP_STATE_OFF);
-            }
-            else if (g_in.ac_p1)
-            {
-                EnterState(PUMP_STATE_START_WAIT_RPM);
-            }
-            else if ((now - g_state_tick) >= T_AC_TIMEOUT_MS)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-        }
-        else if (SelectedPumpIsP2())
-        {
-            g_out.pump2_cmd = 1U;
-            g_out.pump1_cmd = 0U;
-
-            if (!g_in.pressure_p2)
-            {
-                StopAllPumps();
-                EnterState(PUMP_STATE_OFF);
-            }
-            else if (g_in.ac_p2)
-            {
-                EnterState(PUMP_STATE_START_WAIT_RPM);
-            }
-            else if ((now - g_state_tick) >= T_AC_TIMEOUT_MS)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-        }
-        else
-        {
-            StopAllPumps();
-            EnterState(PUMP_STATE_OFF);
-        }
-        break;
-
     case PUMP_STATE_START_WAIT_RPM:
-        if (SelectedPumpIsP1())
-        {
-            g_out.pump1_cmd = 1U;
-
-            if (!g_in.pressure_p1)
-            {
-                StopAllPumps();
-                EnterState(PUMP_STATE_OFF);
-            }
-            else if (!g_in.ac_p1)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-            else if (g_in.rpm_p1)
-            {
-                EnterState(PUMP_STATE_RUN_WAIT_PRESSURE_RECOVERY);
-            }
-            else if ((now - g_state_tick) >= T_RPM_TIMEOUT_MS)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-        }
-        else if (SelectedPumpIsP2())
-        {
-            g_out.pump2_cmd = 1U;
-
-            if (!g_in.pressure_p2)
-            {
-                StopAllPumps();
-                EnterState(PUMP_STATE_OFF);
-            }
-            else if (!g_in.ac_p2)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-            else if (g_in.rpm_p2)
-            {
-                EnterState(PUMP_STATE_RUN_WAIT_PRESSURE_RECOVERY);
-            }
-            else if ((now - g_state_tick) >= T_RPM_TIMEOUT_MS)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-        }
-        else
-        {
-            StopAllPumps();
-            EnterState(PUMP_STATE_OFF);
-        }
-        break;
-
     case PUMP_STATE_RUN_WAIT_PRESSURE_RECOVERY:
-        if (SelectedPumpIsP1())
-        {
-            g_out.pump1_cmd = 1U;
-
-            if (!g_in.ac_p1 || !g_in.rpm_p1)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-            else if (!g_in.pressure_p1)
-            {
-                EnterState(PUMP_STATE_RUNNING);
-            }
-            else if ((now - g_state_tick) >= T_PRESSURE_RECOVER_MS)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-        }
-        else if (SelectedPumpIsP2())
-        {
-            g_out.pump2_cmd = 1U;
-
-            if (!g_in.ac_p2 || !g_in.rpm_p2)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-            else if (!g_in.pressure_p2)
-            {
-                EnterState(PUMP_STATE_RUNNING);
-            }
-            else if ((now - g_state_tick) >= T_PRESSURE_RECOVER_MS)
-            {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
-            }
-        }
-        else
-        {
-            StopAllPumps();
-            EnterState(PUMP_STATE_OFF);
-        }
-        break;
-
     case PUMP_STATE_RUNNING:
         if (SelectedPumpIsP1())
         {
-            g_out.pump1_cmd = 1U;
-
-            if (!g_in.ac_p1 || !g_in.rpm_p1)
+            if (PumpRunRequest(g_in.pressure_p1, g_in.rpm_p1))
             {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
+                if (g_in.ac_p1)
+                {
+                    g_out.pump1_cmd = 1U;
+                    g_out.pump2_cmd = 0U;
+                    EnterState(PUMP_STATE_RUNNING);
+                }
+                else
+                {
+                    StopAllPumps();
+                    g_alarm_latched = 1U;
+                    EnterState(PUMP_STATE_FAULT);
+                }
             }
-            else if (!g_in.pressure_p1)
+            else
             {
                 StopAllPumps();
                 EnterState(PUMP_STATE_OFF);
@@ -1022,15 +785,22 @@ static void RunDualPumpLogic(void)
         }
         else if (SelectedPumpIsP2())
         {
-            g_out.pump2_cmd = 1U;
-
-            if (!g_in.ac_p2 || !g_in.rpm_p2)
+            if (PumpRunRequest(g_in.pressure_p2, g_in.rpm_p2))
             {
-                StopAllPumps();
-                g_alarm_latched = 1U;
-                EnterState(PUMP_STATE_FAULT);
+                if (g_in.ac_p2)
+                {
+                    g_out.pump2_cmd = 1U;
+                    g_out.pump1_cmd = 0U;
+                    EnterState(PUMP_STATE_RUNNING);
+                }
+                else
+                {
+                    StopAllPumps();
+                    g_alarm_latched = 1U;
+                    EnterState(PUMP_STATE_FAULT);
+                }
             }
-            else if (!g_in.pressure_p2)
+            else
             {
                 StopAllPumps();
                 EnterState(PUMP_STATE_OFF);
@@ -1085,7 +855,7 @@ static void RunOutputTestProgram(void)
     if ((now - g_test_relay_tick) >= T_OUTPUT_TEST_STEP_MS)
     {
         g_test_relay_tick = now;
-        g_test_relay_step = (uint8_t)((g_test_relay_step + 1U) % 3U);
+        g_test_relay_step = (uint8_t)((g_test_relay_step + 1U) % 4U);
     }
 
     switch (g_test_relay_step)
@@ -1097,8 +867,11 @@ static void RunOutputTestProgram(void)
         g_out.pump1_cmd = 1U;
         break;
     case 2:
-    default:
         g_out.pump2_cmd = 1U;
+        break;
+    case 3:
+    default:
+        /* 200 ms break before the relay sequence repeats from Q1. */
         break;
     }
 
@@ -1176,13 +949,8 @@ static void RunControlLogic(void)
 
     if (CONTROL_MODE != CONTROL_MODE_OUTPUT_TEST_CFG)
     {
-        g_out.ind1_system_ready = 1U;
-        g_out.ind2_p1_ready =
-#if (CONTROL_MODE == CONTROL_MODE_BYPASS_DUAL_CFG)
-            (g_p1_channel.alarm_latched == 0U);
-#else
-            P1Ready();
-#endif
+        g_out.ind1_system_ready = (g_alarm_latched == 0U) ? 1U : 0U;
+        g_out.ind2_p1_ready = P1Ready();
         g_out.ind3_p1_on = g_out.pump1_cmd;
         g_out.ind4_p1_standby =
 #if (CONTROL_MODE == CONTROL_MODE_BYPASS_DUAL_CFG)
@@ -1190,12 +958,7 @@ static void RunControlLogic(void)
 #else
             (APP_MODE == APP_MODE_DUAL_PUMP_CFG) ? (g_in.selector == SELECTOR_P2) : 0U;
 #endif
-        g_out.ind5_p2_ready =
-#if (CONTROL_MODE == CONTROL_MODE_BYPASS_DUAL_CFG)
-            (g_p2_channel.alarm_latched == 0U);
-#else
-            P2Ready();
-#endif
+        g_out.ind5_p2_ready = P2Ready();
         g_out.ind6_p2_on = g_out.pump2_cmd;
         g_out.ind7_p2_standby =
 #if (CONTROL_MODE == CONTROL_MODE_BYPASS_DUAL_CFG)
