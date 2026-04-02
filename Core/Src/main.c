@@ -125,7 +125,7 @@ typedef struct
 /* Choose one firmware behavior:
    CONTROL_MODE_SELECTOR_DUAL_CFG = original selector-driven controller
    CONTROL_MODE_BYPASS_DUAL_CFG   = temporary bypass, pump 1 and pump 2 run independently
-   CONTROL_MODE_OUTPUT_TEST_CFG   = output test, steps each output every 500 ms
+   CONTROL_MODE_OUTPUT_TEST_CFG   = relay and indicator IO test firmware
 */
 #define CONTROL_MODE_SELECTOR_DUAL_CFG 0U
 #define CONTROL_MODE_BYPASS_DUAL_CFG 1U
@@ -133,6 +133,9 @@ typedef struct
 
 /* Change only this line to select the firmware behavior. */
 #define CONTROL_MODE CONTROL_MODE_SELECTOR_DUAL_CFG
+
+/* Change this to adjust the output-test repeat time. */
+#define OUTPUT_TEST_REPEAT_MS 200U
 
 /* Input polarities: set 1 if active high, 0 if active low */
 #define PRESSURE_ACTIVE_LEVEL 0U
@@ -149,7 +152,7 @@ typedef struct
 #define T_PRESSURE_RECOVER_MS 30000U
 #define T_ACK_LONGPRESS_MS 1500U
 #define T_BLINK_MS 500U
-#define T_OUTPUT_TEST_STEP_MS 500U
+#define T_OUTPUT_TEST_STEP_MS OUTPUT_TEST_REPEAT_MS
 
 /* USER CODE END PD */
 
@@ -179,8 +182,10 @@ static PumpChannel_t g_p2_channel = {PUMP_STATE_OFF, 0U, 0U};
 static uint8_t g_last_ack_raw = 0;
 static uint32_t g_ack_press_tick = 0;
 static uint8_t g_lamp_test_active = 0;
-static uint8_t g_test_step = 0U;
-static uint32_t g_test_step_tick = 0U;
+static MAYBE_UNUSED uint8_t g_test_relay_step = 0U;
+static MAYBE_UNUSED uint8_t g_test_led_step = 0U;
+static MAYBE_UNUSED uint32_t g_test_relay_tick = 0U;
+static MAYBE_UNUSED uint32_t g_test_led_tick = 0U;
 static uint8_t g_test_sys_led1 = 0U;
 static uint8_t g_test_sys_led2 = 0U;
 
@@ -228,7 +233,7 @@ static void ClearOutputs(void);
 static void RunControlLogic(void);
 static MAYBE_UNUSED void RunSinglePumpLogic(void);
 static MAYBE_UNUSED void RunDualPumpLogic(void);
-static void RunBypassDualLogic(void);
+static MAYBE_UNUSED void RunBypassDualLogic(void);
 static MAYBE_UNUSED void RunOutputTestProgram(void);
 static void RunPumpChannel(PumpChannel_t *channel,
                            uint8_t demand_active,
@@ -412,9 +417,9 @@ static void SR_Write24(uint8_t u1, uint8_t u2, uint8_t u3)
     }
 
     /* Your chain: MCU → U1 → U3 → U6 */
-    tx[0] = u1; // U1 = relay
+    tx[0] = u3; // U6 = LED2 (farthest)
     tx[1] = u2; // U3 = LED1
-    tx[2] = u3; // U6 = LED2
+    tx[2] = u1; // U1 = relay (nearest)
 
     /* Disable outputs (OE HIGH) */
     HAL_GPIO_WritePin(SR_OE_GPIO, SR_OE_PIN, GPIO_PIN_SET);
@@ -1073,17 +1078,17 @@ static void RunOutputTestProgram(void)
 {
     uint32_t now = HAL_GetTick();
 
-    if ((now - g_test_step_tick) >= T_OUTPUT_TEST_STEP_MS)
-    {
-        g_test_step_tick = now;
-        g_test_step = (uint8_t)((g_test_step + 1U) % 14U);
-    }
-
     g_test_sys_led1 = 0U;
     g_test_sys_led2 = 0U;
     g_alarm_latched = 0U;
 
-    switch (g_test_step)
+    if ((now - g_test_relay_tick) >= T_OUTPUT_TEST_STEP_MS)
+    {
+        g_test_relay_tick = now;
+        g_test_relay_step = (uint8_t)((g_test_relay_step + 1U) % 3U);
+    }
+
+    switch (g_test_relay_step)
     {
     case 0:
         g_out.failure_ams = 1U;
@@ -1092,43 +1097,66 @@ static void RunOutputTestProgram(void)
         g_out.pump1_cmd = 1U;
         break;
     case 2:
+    default:
         g_out.pump2_cmd = 1U;
         break;
-    case 3:
-        g_out.ind1_system_ready = 1U;
-        break;
-    case 4:
-        g_out.ind2_p1_ready = 1U;
-        break;
-    case 5:
-        g_out.ind3_p1_on = 1U;
-        break;
-    case 6:
-        g_out.ind4_p1_standby = 1U;
-        break;
-    case 7:
-        g_out.ind5_p2_ready = 1U;
-        break;
-    case 8:
-        g_out.ind6_p2_on = 1U;
-        break;
-    case 9:
-        g_out.ind7_p2_standby = 1U;
-        break;
-    case 10:
-        g_out.ind8_pressure_low = 1U;
-        break;
-    case 11:
-        g_out.ind9_standby_alarm = 1U;
-        break;
-    case 12:
-        g_test_sys_led1 = 1U;
-        break;
-    case 13:
-        g_test_sys_led2 = 1U;
-        break;
-    default:
-        break;
+    }
+
+    if (g_in.pressure_p1)
+    {
+        g_out.ind1_system_ready = 1U;  /* I4 -> IND9 */
+    }
+    else if (g_in.rpm_p1)
+    {
+        g_out.ind2_p1_ready = 1U;      /* I5 -> IND1 */
+    }
+    else if (g_in.pressure_p2)
+    {
+        g_out.ind3_p1_on = 1U;         /* I6 -> IND10 */
+    }
+    else if (g_in.rpm_p2)
+    {
+        g_out.ind4_p1_standby = 1U;    /* I7 -> IND2 */
+    }
+    else
+    {
+        if ((now - g_test_led_tick) >= T_OUTPUT_TEST_STEP_MS)
+        {
+            g_test_led_tick = now;
+            g_test_led_step = (uint8_t)((g_test_led_step + 1U) % 9U);
+        }
+
+        switch (g_test_led_step)
+        {
+        case 0:
+            g_out.ind1_system_ready = 1U;  /* IND9  */
+            break;
+        case 1:
+            g_out.ind2_p1_ready = 1U;      /* IND1  */
+            break;
+        case 2:
+            g_out.ind3_p1_on = 1U;         /* IND10 */
+            break;
+        case 3:
+            g_out.ind4_p1_standby = 1U;    /* IND2  */
+            break;
+        case 4:
+            g_out.ind5_p2_ready = 1U;      /* IND11 */
+            break;
+        case 5:
+            g_out.ind6_p2_on = 1U;         /* IND3  */
+            break;
+        case 6:
+            g_out.ind7_p2_standby = 1U;    /* IND12 */
+            break;
+        case 7:
+            g_out.ind8_pressure_low = 1U;  /* IND4  */
+            break;
+        case 8:
+        default:
+            g_out.ind9_standby_alarm = 1U; /* IND13 */
+            break;
+        }
     }
 }
 
