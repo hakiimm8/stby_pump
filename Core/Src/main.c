@@ -1255,6 +1255,22 @@ static void UpdateOutputs(void)
     if (g_out.ind9_standby_alarm)
         led_byte_2 |= (1U << 4); /* IND13 */
 
+    if (g_in.lamp_test)
+    {
+        /* Drive all panel indicator bits directly during lamp test so the
+           visible panel state does not depend on any intermediate logic. */
+        led_byte_1 |= (1U << 0); /* IND1  */
+        led_byte_1 |= (1U << 1); /* IND2  */
+        led_byte_1 |= (1U << 2); /* IND3  */
+        led_byte_1 |= (1U << 3); /* IND4  */
+
+        led_byte_2 |= (1U << 0); /* IND9  */
+        led_byte_2 |= (1U << 1); /* IND10 */
+        led_byte_2 |= (1U << 2); /* IND11 */
+        led_byte_2 |= (1U << 3); /* IND12 */
+        led_byte_2 |= (1U << 4); /* IND13 */
+    }
+
     SR_Write24(relay_byte, led_byte_1, led_byte_2);
 }
 
