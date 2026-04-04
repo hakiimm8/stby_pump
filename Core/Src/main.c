@@ -1199,7 +1199,7 @@ static MAYBE_UNUSED void RunNormalModeSection(void)
     RunDualPumpLogic();
 #endif
 
-    g_out.ind1_system_ready = (g_alarm_latched == 0U) ? 1U : 0U;
+    g_out.ind1_system_ready = 1U;
     g_out.ind2_p1_ready = P1Ready();
     g_out.ind3_p1_on = g_out.pump1_cmd;
 #if (APP_MODE == APP_MODE_DUAL_PUMP_CFG)
@@ -1271,13 +1271,13 @@ static MAYBE_UNUSED void RunBypassModeSection(void)
         g_bypass_p2_faults.latched_mask & FAULT_P2_PRESSURE_TIMEOUT_MASK;
 
     g_alarm_latched = (bypass_latched_mask != 0U) ? 1U : 0U;
-    g_out.ind1_system_ready = (g_alarm_latched == 0U) ? 1U : 0U;
+    g_out.ind1_system_ready = 1U;
     g_out.ind2_p1_ready = g_in.ac_p1;
     g_out.ind3_p1_on = g_out.pump1_cmd;
-    g_out.ind4_p1_standby = 0U;
+    g_out.ind4_p1_standby = (uint8_t)(g_in.ac_p1 && !g_out.pump1_cmd);
     g_out.ind5_p2_ready = g_in.ac_p2;
     g_out.ind6_p2_on = g_out.pump2_cmd;
-    g_out.ind7_p2_standby = 0U;
+    g_out.ind7_p2_standby = (uint8_t)(g_in.ac_p2 && !g_out.pump2_cmd);
     g_out.ind8_pressure_low = (uint8_t)(g_in.pressure_p1 || g_in.pressure_p2);
     g_out.ind9_standby_alarm =
         ((bypass_pressure_timeout_latched_mask != 0U) && g_alarm_blink) ? 1U : 0U;

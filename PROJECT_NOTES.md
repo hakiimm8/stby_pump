@@ -203,10 +203,10 @@ For LED bank 2:
 
 Current logic meaning:
 
-- `System ready` = no latched alarm
+- `System ready` = module powered and firmware running
 - `Pump ready` = `ACx_IN` ready input is active
 - `Pump ON` = pump command active
-- `Pump standby` = opposite pump selected in dual mode
+- `Pump standby` = in normal mode, opposite pump selected; in bypass mode, pump ready and not currently on
 - `Pressure low` = demand active
 - `Standby alarm` = same latched `10 s` pressure-timeout alarm as `Failure AMS`, blinking on the module indicator
 - `Failure AMS` = live control uses it only for the `10 s` pressure-timeout fault; output test still drives it in sequence

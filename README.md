@@ -33,7 +33,7 @@ For the selected pump:
 2. The selected pump may run only if its `ACx_IN` ready input is active
 3. If a run request exists while the selected pump is not ready, alarm latches and the pump stays off
 4. The standby pump stops only when pressure low is inactive and RPM is active
-5. `System ready` means no latched alarm
+5. `System ready` means the module is powered and running
 6. If a pump is running and pressure stays low for `10 s`, the controller stops the pump, latches alarm, and turns on `Failure AMS` until `ACK`
 7. `IND13 Standby alarm` follows the same latched `10 s` pressure-timeout alarm as `Failure AMS`
 
@@ -112,6 +112,11 @@ Important generated GPIO startup states:
 - Bit 2 = `IND11` Pump 2 ready
 - Bit 3 = `IND12` Pump 2 standby
 - Bit 4 = `IND13` Standby alarm
+
+Bypass mode indicator meaning:
+
+- `Pump 1 standby` = pump 1 ready and not currently running
+- `Pump 2 standby` = pump 2 ready and not currently running
 
 ## Build / Import
 

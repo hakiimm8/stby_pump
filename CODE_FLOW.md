@@ -186,7 +186,6 @@ It can be caused by:
 
 This alarm affects:
 
-- `System ready` indicator
 - internal alarm state
 - ACK handling
 
@@ -242,7 +241,7 @@ This also means the `10 s` timeout starts again from the new pump start, not fro
 ### Panel indicators
 
 - `IND9 System ready`
-  - on when the general alarm is not latched
+  - on whenever the module is powered and the firmware is running
 
 - `IND1 Pump 1 ready`
   - follows pump 1 AC ready input
@@ -251,7 +250,8 @@ This also means the `10 s` timeout starts again from the new pump start, not fro
   - on when pump 1 command is active
 
 - `IND2 Pump 1 standby`
-  - on when selector is on pump 2 in normal dual mode
+  - in normal mode: on when selector is on pump 2
+  - in bypass mode: on when pump 1 is ready and not currently running
 
 - `IND11 Pump 2 ready`
   - follows pump 2 AC ready input
@@ -260,7 +260,8 @@ This also means the `10 s` timeout starts again from the new pump start, not fro
   - on when pump 2 command is active
 
 - `IND12 Pump 2 standby`
-  - on when selector is on pump 1 in normal dual mode
+  - in normal mode: on when selector is on pump 1
+  - in bypass mode: on when pump 2 is ready and not currently running
 
 - `IND4 Pressure low`
   - shows active demand
