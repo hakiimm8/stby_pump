@@ -206,6 +206,10 @@ static MAYBE_UNUSED uint8_t g_test_relay_step = 0U;
 static MAYBE_UNUSED uint8_t g_test_led_step = 0U;
 static MAYBE_UNUSED uint32_t g_test_relay_tick = 0U;
 static MAYBE_UNUSED uint32_t g_test_led_tick = 0U;
+static MAYBE_UNUSED uint8_t g_test_ack_group_size = 1U;
+static MAYBE_UNUSED uint8_t g_test_ack_group_index = 0U;
+static MAYBE_UNUSED uint8_t g_test_ack_group_pass = 0U;
+static MAYBE_UNUSED uint8_t g_test_ack_active_last = 0U;
 static uint8_t g_test_sys_led1 = 0U;
 static uint8_t g_test_sys_led2 = 0U;
 
@@ -258,6 +262,7 @@ static MAYBE_UNUSED void RunSinglePumpLogic(void);
 static MAYBE_UNUSED void RunDualPumpLogic(void);
 static MAYBE_UNUSED void RunBypassDualLogic(void);
 static MAYBE_UNUSED void RunOutputTestProgram(void);
+static void SetTestIndicatorByOrder(uint8_t index);
 static void RunPumpChannel(PumpChannel_t *channel,
                            uint8_t pressure_low,
                            uint8_t not_ready_fault_active,
@@ -1081,9 +1086,45 @@ static void RunBypassDualLogic(void)
 
 }
 
+static void SetTestIndicatorByOrder(uint8_t index)
+{
+    switch (index)
+    {
+    case 0:
+        g_out.ind1_system_ready = 1U; /* IND9  */
+        break;
+    case 1:
+        g_out.ind2_p1_ready = 1U;     /* IND1  */
+        break;
+    case 2:
+        g_out.ind3_p1_on = 1U;        /* IND10 */
+        break;
+    case 3:
+        g_out.ind4_p1_standby = 1U;   /* IND2  */
+        break;
+    case 4:
+        g_out.ind5_p2_ready = 1U;     /* IND11 */
+        break;
+    case 5:
+        g_out.ind6_p2_on = 1U;        /* IND3  */
+        break;
+    case 6:
+        g_out.ind7_p2_standby = 1U;   /* IND12 */
+        break;
+    case 7:
+        g_out.ind8_pressure_low = 1U; /* IND4  */
+        break;
+    case 8:
+    default:
+        g_out.ind9_standby_alarm = 1U; /* IND13 */
+        break;
+    }
+}
+
 static void RunOutputTestProgram(void)
 {
     uint32_t now = HAL_GetTick();
+    uint8_t ack_active = NormalizeLevel(db_ack_lt, ACK_LT_ACTIVE_LEVEL);
 
     g_test_sys_led1 = 0U;
     g_test_sys_led2 = 0U;
@@ -1093,30 +1134,84 @@ static void RunOutputTestProgram(void)
     g_fault_latched_mask = 0U;
     g_alarm_latched = 0U;
 
-    if ((now - g_test_relay_tick) >= T_OUTPUT_TEST_STEP_MS)
+    if ((ack_active == 0U) && ((now - g_test_relay_tick) >= T_OUTPUT_TEST_STEP_MS))
     {
         g_test_relay_tick = now;
         g_test_relay_step = (uint8_t)((g_test_relay_step + 1U) % 4U);
     }
 
-    switch (g_test_relay_step)
+    if (ack_active == 0U)
     {
-    case 0:
-        g_out.failure_ams = 1U;
-        break;
-    case 1:
-        g_out.pump1_cmd = 1U;
-        break;
-    case 2:
-        g_out.pump2_cmd = 1U;
-        break;
-    case 3:
-    default:
-        /* 200 ms break before the relay sequence repeats from Q1. */
-        break;
+        switch (g_test_relay_step)
+        {
+        case 0:
+            g_out.failure_ams = 1U;
+            break;
+        case 1:
+            g_out.pump1_cmd = 1U;
+            break;
+        case 2:
+            g_out.pump2_cmd = 1U;
+            break;
+        case 3:
+        default:
+            /* 200 ms break before the relay sequence repeats from Q1. */
+            break;
+        }
     }
 
-    if (g_in.pressure_p1)
+    if (ack_active != 0U)
+    {
+        uint8_t num_groups;
+        uint8_t start_index;
+        uint8_t i;
+
+        if (g_test_ack_active_last == 0U)
+        {
+            g_test_ack_group_size = 1U;
+            g_test_ack_group_index = 0U;
+            g_test_ack_group_pass = 0U;
+            g_test_led_tick = now;
+        }
+
+        if ((now - g_test_led_tick) >= T_OUTPUT_TEST_STEP_MS)
+        {
+            g_test_led_tick = now;
+
+            num_groups = (uint8_t)((9U + g_test_ack_group_size - 1U) / g_test_ack_group_size);
+            g_test_ack_group_index++;
+
+            if (g_test_ack_group_index >= num_groups)
+            {
+                g_test_ack_group_index = 0U;
+                g_test_ack_group_pass++;
+
+                if (g_test_ack_group_pass >= 2U)
+                {
+                    g_test_ack_group_pass = 0U;
+                    g_test_ack_group_size++;
+
+                    if (g_test_ack_group_size > 9U)
+                    {
+                        g_test_ack_group_size = 1U;
+                    }
+                }
+            }
+        }
+
+        start_index = (uint8_t)(g_test_ack_group_index * g_test_ack_group_size);
+        for (i = 0U; i < g_test_ack_group_size; i++)
+        {
+            uint8_t led_index = (uint8_t)(start_index + i);
+            if (led_index >= 9U)
+            {
+                break;
+            }
+
+            SetTestIndicatorByOrder(led_index);
+        }
+    }
+    else if (g_in.pressure_p1)
     {
         g_out.ind1_system_ready = 1U;  /* I4 -> IND9 */
     }
@@ -1139,39 +1234,10 @@ static void RunOutputTestProgram(void)
             g_test_led_tick = now;
             g_test_led_step = (uint8_t)((g_test_led_step + 1U) % 9U);
         }
-
-        switch (g_test_led_step)
-        {
-        case 0:
-            g_out.ind1_system_ready = 1U;  /* IND9  */
-            break;
-        case 1:
-            g_out.ind2_p1_ready = 1U;      /* IND1  */
-            break;
-        case 2:
-            g_out.ind3_p1_on = 1U;         /* IND10 */
-            break;
-        case 3:
-            g_out.ind4_p1_standby = 1U;    /* IND2  */
-            break;
-        case 4:
-            g_out.ind5_p2_ready = 1U;      /* IND11 */
-            break;
-        case 5:
-            g_out.ind6_p2_on = 1U;         /* IND3  */
-            break;
-        case 6:
-            g_out.ind7_p2_standby = 1U;    /* IND12 */
-            break;
-        case 7:
-            g_out.ind8_pressure_low = 1U;  /* IND4  */
-            break;
-        case 8:
-        default:
-            g_out.ind9_standby_alarm = 1U; /* IND13 */
-            break;
-        }
+        SetTestIndicatorByOrder(g_test_led_step);
     }
+
+    g_test_ack_active_last = ack_active;
 }
 
 static void RunControlLogic(void)
@@ -1354,7 +1420,7 @@ static void UpdateOutputs(void)
     if (g_out.ind9_standby_alarm)
         led_byte_2 |= (1U << 4); /* IND13 */
 
-    if (g_in.lamp_test)
+    if ((CONTROL_MODE != CONTROL_MODE_OUTPUT_TEST_CFG) && g_in.lamp_test)
     {
         /* Drive all panel indicator bits directly during lamp test so the
            visible panel state does not depend on any intermediate logic. */

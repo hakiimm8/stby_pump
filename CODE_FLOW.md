@@ -163,6 +163,16 @@ If no test input is active:
 
 - panel LEDs step through the indicator sequence one at a time
 
+If `ACK_LT` is held active during output-test mode:
+
+- all relay outputs are forced off
+- panel LEDs switch to a grouped pattern test
+- stage 1 shows one LED at a time
+- stage 2 shows two LEDs at a time as groups
+- stage 3 shows three LEDs at a time as groups
+- this continues until all nine panel LEDs are on together
+- each stage repeats two full passes before moving to the next stage
+
 If any of the test inputs `I4..I7` is active:
 
 - the sequence is overridden
