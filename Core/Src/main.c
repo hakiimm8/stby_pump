@@ -56,6 +56,7 @@ typedef struct
     uint8_t ac_p2_raw;
 
     uint8_t ack_lt_raw;
+    uint8_t ack_lt1_raw;
     uint8_t sel_p1_raw;
     uint8_t sel_p2_raw;
 } RawInputs_t;
@@ -150,6 +151,7 @@ typedef struct
 #define AC_ACTIVE_LEVEL 0U
 #define SELECTOR_ACTIVE_LEVEL 1U
 #define ACK_LT_ACTIVE_LEVEL 0U
+#define ACK_LT1_ACTIVE_LEVEL 1U
 
 /* Timing */
 #define LOOP_DELAY_MS 20U
@@ -200,8 +202,12 @@ static PumpChannel_t g_p1_channel = {PUMP_STATE_OFF, 0U};
 static PumpChannel_t g_p2_channel = {PUMP_STATE_OFF, 0U};
 
 static uint8_t g_last_ack_raw = 0;
+static uint8_t g_last_ack_lt1_raw = 0;
 static uint32_t g_ack_press_tick = 0;
 static uint8_t g_lamp_test_active = 0;
+static uint8_t g_lamp_test_group_step = 0U;
+static uint8_t g_lamp_test_prev_active = 0U;
+static uint32_t g_lamp_test_tick = 0U;
 static MAYBE_UNUSED uint8_t g_test_relay_step = 0U;
 static MAYBE_UNUSED uint8_t g_test_led_step = 0U;
 static MAYBE_UNUSED uint32_t g_test_relay_tick = 0U;
@@ -223,6 +229,7 @@ static uint8_t db_ac_p2 = 0;
 static uint8_t db_sel_p1 = 0;
 static uint8_t db_sel_p2 = 0;
 static uint8_t db_ack_lt = 0;
+static uint8_t db_ack_lt1 = 0;
 
 static uint32_t db_tick_pressure_p1 = 0;
 static uint32_t db_tick_rpm_p1 = 0;
@@ -233,6 +240,7 @@ static uint32_t db_tick_ac_p2 = 0;
 static uint32_t db_tick_sel_p1 = 0;
 static uint32_t db_tick_sel_p2 = 0;
 static uint32_t db_tick_ack_lt = 0;
+static uint32_t db_tick_ack_lt1 = 0;
 
 /* USER CODE END PV */
 
@@ -263,6 +271,8 @@ static MAYBE_UNUSED void RunDualPumpLogic(void);
 static MAYBE_UNUSED void RunBypassDualLogic(void);
 static MAYBE_UNUSED void RunOutputTestProgram(void);
 static void SetTestIndicatorByOrder(uint8_t index);
+static void ApplyLampTestGroupToOutputs(uint8_t group);
+static void ApplyLampTestGroupToLedBytes(uint8_t group, uint8_t *led_byte_1, uint8_t *led_byte_2);
 static void RunPumpChannel(PumpChannel_t *channel,
                            uint8_t pressure_low,
                            uint8_t not_ready_fault_active,
@@ -344,6 +354,7 @@ static void ReadRawInputs(void)
     g_raw.ac_p2_raw = PIN_IS_ACTIVE(AC2_IN_GPIO_Port, AC2_IN_Pin);
 
     g_raw.ack_lt_raw = PIN_IS_ACTIVE(ACK_LT_GPIO_Port, ACK_LT_Pin);
+    g_raw.ack_lt1_raw = PIN_IS_ACTIVE(ACK_LT1_GPIO_Port, ACK_LT1_Pin);
     g_raw.sel_p1_raw = PIN_IS_ACTIVE(SEL_P1_GPIO_Port, SEL_P1_Pin);
     g_raw.sel_p2_raw = PIN_IS_ACTIVE(SEL_P2_GPIO_Port, SEL_P2_Pin);
 }
@@ -361,6 +372,7 @@ static void ProcessInputs(void)
     DebounceBit(g_raw.sel_p1_raw, &db_sel_p1, &db_tick_sel_p1, T_DEBOUNCE_MS);
     DebounceBit(g_raw.sel_p2_raw, &db_sel_p2, &db_tick_sel_p2, T_DEBOUNCE_MS);
     DebounceBit(g_raw.ack_lt_raw, &db_ack_lt, &db_tick_ack_lt, T_ACK_DEBOUNCE_MS);
+    DebounceBit(g_raw.ack_lt1_raw, &db_ack_lt1, &db_tick_ack_lt1, T_ACK_DEBOUNCE_MS);
 
     g_in.pressure_p1 = NormalizeLevel(db_pressure_p1, PRESSURE_ACTIVE_LEVEL);
     g_in.rpm_p1 = NormalizeLevel(db_rpm_p1, RPM_ACTIVE_LEVEL);
@@ -388,18 +400,22 @@ static void ProcessInputs(void)
     g_in.lamp_test = 0U;
 
     {
-        uint8_t ack_now = NormalizeLevel(db_ack_lt, ACK_LT_ACTIVE_LEVEL);
+        uint8_t ack_remote_now = NormalizeLevel(db_ack_lt, ACK_LT_ACTIVE_LEVEL);
+        uint8_t ack_local_now = NormalizeLevel(db_ack_lt1, ACK_LT1_ACTIVE_LEVEL);
+        uint8_t ack_any_now = (uint8_t)(ack_remote_now || ack_local_now);
 
-        if ((ack_now == 1U) && (g_last_ack_raw == 0U))
+        if ((ack_any_now == 1U) && (g_last_ack_raw == 0U))
+        {
+            g_in.ack_short = 1U;
+        }
+
+        if ((ack_local_now == 1U) && (g_last_ack_lt1_raw == 0U))
         {
             g_ack_press_tick = now;
-            /* ACK happens immediately on the press edge.
-               A long hold still becomes lamp test, so long press = ACK + lamp test. */
-            g_in.ack_short = 1U;
             g_lamp_test_active = 0U;
         }
 
-        if (ack_now == 1U)
+        if (ack_local_now == 1U)
         {
             if ((now - g_ack_press_tick) >= T_ACK_LONGPRESS_MS)
             {
@@ -412,7 +428,8 @@ static void ProcessInputs(void)
         }
 
         g_in.lamp_test = g_lamp_test_active;
-        g_last_ack_raw = ack_now;
+        g_last_ack_raw = ack_any_now;
+        g_last_ack_lt1_raw = ack_local_now;
     }
 
     g_alarm_blink = (((now / T_BLINK_MS) & 0x01U) != 0U) ? 1U : 0U;
@@ -516,6 +533,7 @@ static void PrimeDebouncedInputs(void)
     db_sel_p1 = g_raw.sel_p1_raw;
     db_sel_p2 = g_raw.sel_p2_raw;
     db_ack_lt = g_raw.ack_lt_raw;
+    db_ack_lt1 = g_raw.ack_lt1_raw;
 
     db_tick_pressure_p1 = now;
     db_tick_rpm_p1 = now;
@@ -526,6 +544,7 @@ static void PrimeDebouncedInputs(void)
     db_tick_sel_p1 = now;
     db_tick_sel_p2 = now;
     db_tick_ack_lt = now;
+    db_tick_ack_lt1 = now;
 }
 
 static uint8_t PressureDemandForPump(SelectorState_t pump)
@@ -1121,10 +1140,61 @@ static void SetTestIndicatorByOrder(uint8_t index)
     }
 }
 
+static void ApplyLampTestGroupToOutputs(uint8_t group)
+{
+    uint8_t start_index = (uint8_t)(group * 3U);
+    uint8_t i;
+
+    g_out.ind1_system_ready = 0U;
+    g_out.ind2_p1_ready = 0U;
+    g_out.ind3_p1_on = 0U;
+    g_out.ind4_p1_standby = 0U;
+    g_out.ind5_p2_ready = 0U;
+    g_out.ind6_p2_on = 0U;
+    g_out.ind7_p2_standby = 0U;
+    g_out.ind8_pressure_low = 0U;
+    g_out.ind9_standby_alarm = 0U;
+
+    for (i = 0U; i < 3U; i++)
+    {
+        uint8_t led_index = (uint8_t)(start_index + i);
+        if (led_index >= 9U)
+        {
+            break;
+        }
+
+        SetTestIndicatorByOrder(led_index);
+    }
+}
+
+static void ApplyLampTestGroupToLedBytes(uint8_t group, uint8_t *led_byte_1, uint8_t *led_byte_2)
+{
+    switch (group)
+    {
+    case 0:
+    default:
+        *led_byte_2 |= (1U << 0); /* IND9  */
+        *led_byte_1 |= (1U << 0); /* IND1  */
+        *led_byte_2 |= (1U << 1); /* IND10 */
+        break;
+    case 1:
+        *led_byte_1 |= (1U << 1); /* IND2  */
+        *led_byte_2 |= (1U << 2); /* IND11 */
+        *led_byte_1 |= (1U << 2); /* IND3  */
+        break;
+    case 2:
+        *led_byte_2 |= (1U << 3); /* IND12 */
+        *led_byte_1 |= (1U << 3); /* IND4  */
+        *led_byte_2 |= (1U << 4); /* IND13 */
+        break;
+    }
+}
+
 static void RunOutputTestProgram(void)
 {
     uint32_t now = HAL_GetTick();
-    uint8_t ack_active = NormalizeLevel(db_ack_lt, ACK_LT_ACTIVE_LEVEL);
+    uint8_t ack_active = (uint8_t)(NormalizeLevel(db_ack_lt, ACK_LT_ACTIVE_LEVEL) ||
+                                   NormalizeLevel(db_ack_lt1, ACK_LT1_ACTIVE_LEVEL));
 
     g_test_sys_led1 = 0U;
     g_test_sys_led2 = 0U;
@@ -1360,21 +1430,32 @@ static MAYBE_UNUSED void RunOutputTestModeSection(void)
 {
     UpdateAlarmLatch(0U);
     RunOutputTestProgram();
+    ApplyLampTestIfNeeded();
 }
 
 static void ApplyLampTestIfNeeded(void)
 {
     if (g_in.lamp_test)
     {
-        g_out.ind1_system_ready = 1U;
-        g_out.ind2_p1_ready = 1U;
-        g_out.ind3_p1_on = 1U;
-        g_out.ind4_p1_standby = 1U;
-        g_out.ind5_p2_ready = 1U;
-        g_out.ind6_p2_on = 1U;
-        g_out.ind7_p2_standby = 1U;
-        g_out.ind8_pressure_low = 1U;
-        g_out.ind9_standby_alarm = 1U;
+        uint32_t now = HAL_GetTick();
+
+        if (g_lamp_test_prev_active == 0U)
+        {
+            g_lamp_test_group_step = 0U;
+            g_lamp_test_tick = now;
+        }
+        else if ((now - g_lamp_test_tick) >= T_OUTPUT_TEST_STEP_MS)
+        {
+            g_lamp_test_tick = now;
+            g_lamp_test_group_step = (uint8_t)((g_lamp_test_group_step + 1U) % 3U);
+        }
+
+        ApplyLampTestGroupToOutputs(g_lamp_test_group_step);
+        g_lamp_test_prev_active = 1U;
+    }
+    else
+    {
+        g_lamp_test_prev_active = 0U;
     }
 }
 
@@ -1420,20 +1501,11 @@ static void UpdateOutputs(void)
     if (g_out.ind9_standby_alarm)
         led_byte_2 |= (1U << 4); /* IND13 */
 
-    if ((CONTROL_MODE != CONTROL_MODE_OUTPUT_TEST_CFG) && g_in.lamp_test)
+    if (g_in.lamp_test)
     {
-        /* Drive all panel indicator bits directly during lamp test so the
-           visible panel state does not depend on any intermediate logic. */
-        led_byte_1 |= (1U << 0); /* IND1  */
-        led_byte_1 |= (1U << 1); /* IND2  */
-        led_byte_1 |= (1U << 2); /* IND3  */
-        led_byte_1 |= (1U << 3); /* IND4  */
-
-        led_byte_2 |= (1U << 0); /* IND9  */
-        led_byte_2 |= (1U << 1); /* IND10 */
-        led_byte_2 |= (1U << 2); /* IND11 */
-        led_byte_2 |= (1U << 3); /* IND12 */
-        led_byte_2 |= (1U << 4); /* IND13 */
+        led_byte_1 = 0U;
+        led_byte_2 = 0U;
+        ApplyLampTestGroupToLedBytes(g_lamp_test_group_step, &led_byte_1, &led_byte_2);
     }
 
     SR_Write24(relay_byte, led_byte_1, led_byte_2);
@@ -1613,6 +1685,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : ACK_LT1_Pin */
+  GPIO_InitStruct.Pin = ACK_LT1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(ACK_LT1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SW_COMMON_Pin */
   GPIO_InitStruct.Pin = SW_COMMON_Pin;
