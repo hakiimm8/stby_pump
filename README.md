@@ -35,6 +35,7 @@ For the selected pump:
 4. The standby pump stops only when pressure low is inactive and RPM is active
 5. `System ready` means no latched alarm
 6. If a pump is running and pressure stays low for `10 s`, the controller stops the pump, latches alarm, and turns on `Failure AMS` until `ACK`
+7. `IND13 Standby alarm` follows the same latched `10 s` pressure-timeout alarm as `Failure AMS`
 
 ## Alarm / ACK / Lamp Test
 
@@ -160,4 +161,4 @@ Hardware validation is still required for:
 - Verify pump starts on low pressure or inactive RPM only when the selected pump is ready
 - Verify pump stops only when pressure low clears and RPM is active
 - Verify alarm latch behavior for not-ready / invalid selector faults
-- Verify `Failure AMS` only turns on after a `10 s` low-pressure timeout while the pump is running
+- Verify `Failure AMS` and `IND13 Standby alarm` only turn on after a `10 s` low-pressure timeout while the pump is running

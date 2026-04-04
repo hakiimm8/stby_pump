@@ -184,10 +184,6 @@ static uint32_t g_fault_active_mask = 0U;
 static uint32_t g_fault_new_mask = 0U;
 static uint32_t g_fault_prev_active_mask = 0U;
 static uint32_t g_fault_latched_mask = 0U;
-static uint8_t g_p1_pressure_timer_active = 0U;
-static uint8_t g_p2_pressure_timer_active = 0U;
-static uint32_t g_p1_pressure_low_tick = 0U;
-static uint32_t g_p2_pressure_low_tick = 0U;
 
 static PumpChannel_t g_p1_channel = {PUMP_STATE_OFF, 0U};
 static PumpChannel_t g_p2_channel = {PUMP_STATE_OFF, 0U};
@@ -264,10 +260,6 @@ static uint8_t PressureDemandActive(void);
 static uint8_t PressureDemandForPump(SelectorState_t pump);
 static uint8_t PumpRunRequest(uint8_t pressure_low, uint8_t rpm_active);
 static uint8_t PumpStateIsRunning(PumpState_t state);
-static void UpdatePressureTimer(uint8_t pump_running, uint8_t pressure_low, uint8_t *timer_active, uint32_t *tick);
-static void ResetPressureTimer(uint8_t *timer_active, uint32_t *tick);
-static void UpdatePressureTimeoutTracking(void);
-static uint8_t PressureTimeoutExpired(uint8_t timer_active, uint32_t tick);
 static MAYBE_UNUSED uint32_t ComputeSinglePumpFaultMask(void);
 static uint32_t ComputeDualPumpFaultMask(void);
 static MAYBE_UNUSED uint32_t ComputeBypassFaultMask(void);
@@ -545,78 +537,6 @@ static uint8_t PumpStateIsRunning(PumpState_t state)
     }
 }
 
-static void ResetPressureTimer(uint8_t *timer_active, uint32_t *tick)
-{
-    *timer_active = 0U;
-    *tick = 0U;
-}
-
-static void UpdatePressureTimer(uint8_t pump_running, uint8_t pressure_low, uint8_t *timer_active, uint32_t *tick)
-{
-    if (pump_running && pressure_low)
-    {
-        if (*timer_active == 0U)
-        {
-            *timer_active = 1U;
-            *tick = HAL_GetTick();
-        }
-    }
-    else
-    {
-        ResetPressureTimer(timer_active, tick);
-    }
-}
-
-static uint8_t PressureTimeoutExpired(uint8_t timer_active, uint32_t tick)
-{
-    return (uint8_t)((timer_active != 0U) && ((HAL_GetTick() - tick) >= T_PRESSURE_TIMEOUT_MS));
-}
-
-static void UpdatePressureTimeoutTracking(void)
-{
-#if (CONTROL_MODE == CONTROL_MODE_OUTPUT_TEST_CFG)
-    ResetPressureTimer(&g_p1_pressure_timer_active, &g_p1_pressure_low_tick);
-    ResetPressureTimer(&g_p2_pressure_timer_active, &g_p2_pressure_low_tick);
-#elif (CONTROL_MODE == CONTROL_MODE_BYPASS_DUAL_CFG)
-    UpdatePressureTimer(PumpStateIsRunning(g_p1_channel.state),
-                        g_in.pressure_p1,
-                        &g_p1_pressure_timer_active,
-                        &g_p1_pressure_low_tick);
-    UpdatePressureTimer(PumpStateIsRunning(g_p2_channel.state),
-                        g_in.pressure_p2,
-                        &g_p2_pressure_timer_active,
-                        &g_p2_pressure_low_tick);
-#elif (APP_MODE == APP_MODE_SINGLE_PUMP_CFG)
-    UpdatePressureTimer(PumpStateIsRunning(g_state),
-                        g_in.pressure_p1,
-                        &g_p1_pressure_timer_active,
-                        &g_p1_pressure_low_tick);
-    ResetPressureTimer(&g_p2_pressure_timer_active, &g_p2_pressure_low_tick);
-#else
-    if (SelectedPumpIsP1() && PumpStateIsRunning(g_state))
-    {
-        UpdatePressureTimer(1U,
-                            g_in.pressure_p1,
-                            &g_p1_pressure_timer_active,
-                            &g_p1_pressure_low_tick);
-        ResetPressureTimer(&g_p2_pressure_timer_active, &g_p2_pressure_low_tick);
-    }
-    else if (SelectedPumpIsP2() && PumpStateIsRunning(g_state))
-    {
-        UpdatePressureTimer(1U,
-                            g_in.pressure_p2,
-                            &g_p2_pressure_timer_active,
-                            &g_p2_pressure_low_tick);
-        ResetPressureTimer(&g_p1_pressure_timer_active, &g_p1_pressure_low_tick);
-    }
-    else
-    {
-        ResetPressureTimer(&g_p1_pressure_timer_active, &g_p1_pressure_low_tick);
-        ResetPressureTimer(&g_p2_pressure_timer_active, &g_p2_pressure_low_tick);
-    }
-#endif
-}
-
 static MAYBE_UNUSED uint32_t ComputeSinglePumpFaultMask(void)
 {
     uint32_t fault_mask = 0U;
@@ -626,7 +546,9 @@ static MAYBE_UNUSED uint32_t ComputeSinglePumpFaultMask(void)
         fault_mask |= FAULT_P1_NOT_READY_MASK;
     }
 
-    if (PressureTimeoutExpired(g_p1_pressure_timer_active, g_p1_pressure_low_tick))
+    if (PumpStateIsRunning(g_state) &&
+        g_in.pressure_p1 &&
+        ((HAL_GetTick() - g_state_tick) >= T_PRESSURE_TIMEOUT_MS))
     {
         fault_mask |= FAULT_P1_PRESSURE_TIMEOUT_MASK;
     }
@@ -655,12 +577,18 @@ static uint32_t ComputeDualPumpFaultMask(void)
         fault_mask |= FAULT_P2_NOT_READY_MASK;
     }
 
-    if (PressureTimeoutExpired(g_p1_pressure_timer_active, g_p1_pressure_low_tick))
+    if (SelectedPumpIsP1() &&
+        PumpStateIsRunning(g_state) &&
+        g_in.pressure_p1 &&
+        ((HAL_GetTick() - g_state_tick) >= T_PRESSURE_TIMEOUT_MS))
     {
         fault_mask |= FAULT_P1_PRESSURE_TIMEOUT_MASK;
     }
 
-    if (PressureTimeoutExpired(g_p2_pressure_timer_active, g_p2_pressure_low_tick))
+    if (SelectedPumpIsP2() &&
+        PumpStateIsRunning(g_state) &&
+        g_in.pressure_p2 &&
+        ((HAL_GetTick() - g_state_tick) >= T_PRESSURE_TIMEOUT_MS))
     {
         fault_mask |= FAULT_P2_PRESSURE_TIMEOUT_MASK;
     }
@@ -682,12 +610,16 @@ static MAYBE_UNUSED uint32_t ComputeBypassFaultMask(void)
         fault_mask |= FAULT_P2_NOT_READY_MASK;
     }
 
-    if (PressureTimeoutExpired(g_p1_pressure_timer_active, g_p1_pressure_low_tick))
+    if (PumpStateIsRunning(g_p1_channel.state) &&
+        g_in.pressure_p1 &&
+        ((HAL_GetTick() - g_p1_channel.state_tick) >= T_PRESSURE_TIMEOUT_MS))
     {
         fault_mask |= FAULT_P1_PRESSURE_TIMEOUT_MASK;
     }
 
-    if (PressureTimeoutExpired(g_p2_pressure_timer_active, g_p2_pressure_low_tick))
+    if (PumpStateIsRunning(g_p2_channel.state) &&
+        g_in.pressure_p2 &&
+        ((HAL_GetTick() - g_p2_channel.state_tick) >= T_PRESSURE_TIMEOUT_MS))
     {
         fault_mask |= FAULT_P2_PRESSURE_TIMEOUT_MASK;
     }
@@ -1210,7 +1142,6 @@ static void RunOutputTestProgram(void)
 static void RunControlLogic(void)
 {
     ClearOutputs();
-    UpdatePressureTimeoutTracking();
 
 #if (CONTROL_MODE == CONTROL_MODE_OUTPUT_TEST_CFG)
     UpdateAlarmLatch(0U);
@@ -1251,7 +1182,11 @@ static void RunControlLogic(void)
 #else
             PressureDemandActive();
 #endif
-        g_out.ind9_standby_alarm = (g_alarm_latched && g_alarm_blink) ? 1U : 0U;
+        g_out.ind9_standby_alarm =
+            (((g_fault_latched_mask & (FAULT_P1_PRESSURE_TIMEOUT_MASK | FAULT_P2_PRESSURE_TIMEOUT_MASK)) != 0U) &&
+             g_alarm_blink)
+                ? 1U
+                : 0U;
 
         if ((g_fault_latched_mask & (FAULT_P1_PRESSURE_TIMEOUT_MASK | FAULT_P2_PRESSURE_TIMEOUT_MASK)) != 0U)
         {
@@ -1285,7 +1220,7 @@ static void UpdateOutputs(void)
     uint8_t led_byte_2 = 0U; /* U6 = IND9..IND16 */
 
     /* New DC order:
-       Q1 = Failure AMS (test mode only)
+       Q1 = Failure AMS
        Q2 = Pump 1 output
        Q3 = Pump 2 output
     */

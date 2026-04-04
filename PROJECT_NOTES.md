@@ -208,7 +208,7 @@ Current logic meaning:
 - `Pump ON` = pump command active
 - `Pump standby` = opposite pump selected in dual mode
 - `Pressure low` = demand active
-- `Standby alarm` = latched alarm blinking
+- `Standby alarm` = same latched `10 s` pressure-timeout alarm as `Failure AMS`, blinking on the module indicator
 - `Failure AMS` = live control uses it only for the `10 s` pressure-timeout fault; output test still drives it in sequence
 
 ## State Machine Notes
