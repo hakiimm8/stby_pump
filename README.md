@@ -34,8 +34,8 @@ For the selected pump:
 3. If a run request exists while the selected pump is not ready, alarm latches and the pump stays off
 4. The standby pump stops only when pressure low is inactive and RPM is active
 5. `System ready` means the module is powered and running
-6. If a pump is running and pressure stays low for `10 s`, the controller stops the pump and latches alarm until `ACK`
-7. `IND13 Standby alarm` follows that latched `10 s` pressure-timeout alarm
+6. If a pump is commanded on and its feedback is still missing after `3 s`, the controller stops the pump and latches alarm until `ACK`
+7. `IND13 Standby alarm` follows that latched `3 s` no-feedback alarm
 
 ## Alarm / ACK / Lamp Test
 
@@ -116,8 +116,8 @@ Important generated GPIO startup states:
 
 Bypass mode indicator meaning:
 
-- `Pump 1 standby` = pump 1 ready and not currently running
-- `Pump 2 standby` = pump 2 ready and not currently running
+- `Pump 1 standby` = selector is on Pump 1 in normal mode, or pump 1 ready and not currently running in bypass mode
+- `Pump 2 standby` = selector is on Pump 2 in normal mode, or pump 2 ready and not currently running in bypass mode
 
 ## Build / Import
 
@@ -155,7 +155,7 @@ Hardware validation is still required for:
 - Shift register byte order on the real PCB
 - Relay and LED bit mapping on hardware
 - `AC1_IN` / `AC2_IN` ready behavior
-- pressure-timeout standby alarm behavior
+- no-feedback standby alarm behavior
 - run/stop behavior from pressure and RPM inputs
 
 ## Bench Checklist
@@ -170,4 +170,4 @@ Hardware validation is still required for:
 - Verify pump starts on low pressure or inactive RPM only when the selected pump is ready
 - Verify pump stops only when pressure low clears and RPM is active
 - Verify alarm latch behavior for not-ready / invalid selector faults
-- Verify `IND13 Standby alarm` only turns on after a `10 s` low-pressure timeout while the pump is running
+- Verify `IND13 Standby alarm` only turns on after `3 s` of missing feedback while the pump is commanded on

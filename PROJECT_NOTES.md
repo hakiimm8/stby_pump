@@ -224,9 +224,9 @@ Current logic meaning:
 - `System ready` = module powered and firmware running
 - `Pump ready` = `ACx_IN` ready input is active
 - `Pump ON` = pump command active and matching pump feedback active
-- `Pump standby` = in normal mode, opposite pump selected; in bypass mode, pump ready and not currently on
+- `Pump standby` = in normal mode, selected pump indicator; in bypass mode, pump ready and not currently on
 - `Pressure low` = demand active
-- `Standby alarm` = latched `10 s` pressure-timeout alarm, blinking on the module indicator
+- `Standby alarm` = latched `3 s` no-feedback alarm, blinking on the module indicator
 
 ## State Machine Notes
 
@@ -236,7 +236,7 @@ Current run/stop rules for the selected pump:
 2. pump may run only if `ACx_IN` for that pump is active
 3. if run is requested while the selected pump is not ready, alarm latches and the pump stays off
 4. pump stops only when `pressure_low` is inactive and `rpm` is active
-5. if a running pump sees `pressure_low` stay active for `10 s`, the pump stops and the alarm latches
+5. if a commanded pump still has no feedback after `3 s`, the pump stops and the alarm latches
 6. ACK clears the latched alarm and returns the module to normal operation again
 
 Fault causes include:

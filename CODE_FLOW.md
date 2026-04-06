@@ -199,7 +199,7 @@ It can be caused by:
 
 - invalid selector
 - demand exists while the selected pump is not ready
-- pressure-timeout fault
+- feedback-timeout fault
 
 This alarm affects:
 
@@ -214,22 +214,22 @@ This is the specific alarm that drives:
 
 It is a subset of the general alarm behavior.
 
-## Pressure-Timeout Logic
+## Feedback-Timeout Logic
 
 This is the current rule for the latched `Standby alarm`:
 
 1. A pump starts running
 2. The firmware begins counting from the pump run start time
-3. If low pressure is still active after `10 s`, a pressure-timeout fault occurs
+3. If matching pump feedback is still missing after `3 s`, a feedback-timeout fault occurs
 4. The pump is turned off
 5. The alarm is latched
 6. `Standby alarm` blinks on the module front panel
 
-This timeout is checked from pump run start, not from a separate background timer.
+This timeout is checked from pump command start, not from a separate background timer.
 
-If pressure clears before the `10 s` expires:
+If feedback appears before the `3 s` expires:
 
-- the pressure-timeout fault does not occur
+- the feedback-timeout fault does not occur
 
 If the pump is not allowed to start because AC ready is absent:
 
@@ -241,7 +241,7 @@ If the pump is not allowed to start because AC ready is absent:
 
 ACK clears the latched alarm state.
 
-For the pressure-timeout case specifically:
+For the feedback-timeout case specifically:
 
 - ACK clears the latched timeout alarm
 - `Standby alarm` turns off
@@ -249,7 +249,7 @@ For the pressure-timeout case specifically:
 
 After ACK, if demand still exists and the selected pump is ready, the system is allowed to start the pump again as a fresh cycle.
 
-This also means the `10 s` timeout starts again from the new pump start, not from the old failed attempt.
+This also means the `3 s` timeout starts again from the new pump start, not from the old failed attempt.
 
 ## Indicator Behavior
 
@@ -265,7 +265,7 @@ This also means the `10 s` timeout starts again from the new pump start, not fro
   - on when pump 1 command is active
 
 - `IND2 Pump 1 standby`
-  - in normal mode: on when selector is on pump 2
+  - in normal mode: on when selector is on pump 1
   - in bypass mode: on when pump 1 is ready and not currently running
 
 - `IND11 Pump 2 ready`
@@ -275,16 +275,16 @@ This also means the `10 s` timeout starts again from the new pump start, not fro
   - on when pump 2 command is active
 
 - `IND12 Pump 2 standby`
-  - in normal mode: on when selector is on pump 1
+  - in normal mode: on when selector is on pump 2
   - in bypass mode: on when pump 2 is ready and not currently running
 
 - `IND4 Pressure low`
   - shows active demand
-  - in normal mode it follows the selected pump path
+  - in normal mode it reflects either pump pressure input
   - in bypass mode it reflects combined channel demand
 
 - `IND13 Standby alarm`
-  - follows the latched pressure-timeout fault
+  - follows the latched feedback-timeout fault
   - blinks using the common blink timing
 
 ### Lamp test
@@ -336,5 +336,5 @@ The current firmware behaves as a selector-driven standby pump controller with t
 - a selected pump can only run if its AC ready input is active
 - the pump stops when pressure low clears and RPM is active
 - invalid selector and not-ready demand latch the general alarm
-- `Standby alarm` is reserved specifically for the `10 s` pressure-timeout failure after a pump has been running
+- `Standby alarm` is reserved specifically for the `3 s` no-feedback failure after a pump has been commanded on
 - ACK returns the controller to normal operation again
