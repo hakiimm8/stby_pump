@@ -33,18 +33,14 @@ This file is intended to capture project knowledge that is easy to lose between 
 
 ## Input Logic
 
-### Active high inputs
-
-These are currently treated as active high in `Core/Src/main.c`:
-
-- `SEL_P1`
-- `SEL_P2`
-
 ### Active low inputs
 
 These are currently treated as active low in `Core/Src/main.c`:
 
+- `SEL_P1`
+- `SEL_P2`
 - `ACK_LT`
+- `ACK_LT1`
 - `AC1_IN`
 - `AC2_IN`
 - `IN Pressure switch pump 1`
@@ -62,26 +58,35 @@ Current polarity defines:
 - `PRESSURE_ACTIVE_LEVEL = 0U`
 - `RPM_ACTIVE_LEVEL = 0U`
 - `AC_ACTIVE_LEVEL = 0U`
-- `SELECTOR_ACTIVE_LEVEL = 1U`
+- `SELECTOR_ACTIVE_LEVEL = 0U`
 - `ACK_LT_ACTIVE_LEVEL = 0U`
+- `ACK_LT1_ACTIVE_LEVEL = 0U`
 
 ## Selector Wiring
 
-- `PH1` is used as switch common source
 - `PA10` = `SEL_P1`
 - `PA11` = `SEL_P2`
+- selector contacts now pull the input to `GND`
+- selector inputs use internal pull-up and are active low
 
 Expected selector decode:
 
-- `SEL_P1=0`, `SEL_P2=0` -> `OFF`
-- `SEL_P1=1`, `SEL_P2=0` -> `PUMP 1`
-- `SEL_P1=0`, `SEL_P2=1` -> `PUMP 2`
-- `SEL_P1=1`, `SEL_P2=1` -> `INVALID`
+- normalized `SEL_P1=0`, `SEL_P2=0` -> `OFF`
+- normalized `SEL_P1=1`, `SEL_P2=0` -> `PUMP 1`
+- normalized `SEL_P1=0`, `SEL_P2=1` -> `PUMP 2`
+- normalized `SEL_P1=1`, `SEL_P2=1` -> `INVALID`
 
 GPIO assumptions:
 
-- `PH1` starts high
-- `PA10`, `PA11` use pull-down configuration
+- `PA10`, `PA11` use pull-up configuration
+
+## ACK Inputs
+
+- `ACK_LT` on `PB7` is active low and uses external pull-up hardware
+- `ACK_LT1` on `PH0` is active low and uses internal pull-up
+- both inputs behave the same in firmware:
+  - short press = ACK
+  - long press = ACK + lamp test
 
 ## DC / Pump IO Mapping
 
@@ -94,7 +99,6 @@ GPIO assumptions:
 - `I5` = IN RPM switch pump 1
 - `I6` = IN Pressure switch pump 2
 - `I7` = IN RPM switch pump 2
-- `I8` = ACK / Lamp Test
 
 ### MCU direct input pins
 
@@ -102,7 +106,8 @@ GPIO assumptions:
 - `I5` -> `PB4`
 - `I6` -> `PB5`
 - `I7` -> `PB6`
-- `I8` -> `PB7`
+- `ACK_LT` -> `PB7`
+- `ACK_LT1` -> `PH0`
 - `AC1_IN` -> `PB8`
 - `AC2_IN` -> `PB9`
 
@@ -229,8 +234,8 @@ Fault causes include:
 
 ACK/Lamp test behavior:
 
-- short press = ACK
-- long press = ACK + lamp test
+- short press on either ACK input = ACK
+- long press on either ACK input = ACK + lamp test
 
 ## Known Build Status
 

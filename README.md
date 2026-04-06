@@ -40,8 +40,8 @@ For the selected pump:
 ## Alarm / ACK / Lamp Test
 
 - Alarm is latched
-- `ACK_LT` short press clears the alarm latch
-- `ACK_LT` long press activates lamp test and also clears the alarm latch
+- `ACK_LT` and `ACK_LT1` short press clear the alarm latch
+- `ACK_LT` and `ACK_LT1` long press activate lamp test and also clear the alarm latch
 - Lamp test affects display LEDs only
 - Alarm indication blinks at 1 Hz
 - Current implementation performs ACK on the press edge, so long press = ACK + lamp test
@@ -72,17 +72,17 @@ Inputs:
 - `I5` = RPM switch pump 1
 - `I6` = Pressure switch pump 2
 - `I7` = RPM switch pump 2
-- `I8 / PB7` = `ACK_LT`
+- `PB7` = `ACK_LT`
+- `PH0` = `ACK_LT1`
 - `AC1_IN` = pump 1 ready / remote available
 - `AC2_IN` = pump 2 ready / remote available
 - `SEL_P1` = `PA10`
 - `SEL_P2` = `PA11`
-- `SW_COMMON` = `PH1`
 
 Switch wiring:
 
-- `PH1` drives the common source for selector wiring
-- `PA10` and `PA11` use pull-down configuration and are active high
+- `PA10` and `PA11` use pull-up configuration and are active low
+- `ACK_LT1` on `PH0` uses pull-up configuration and is active low
 - `ACK_LT` on `PB7` is active low and is expected to use external pull-up hardware
 - `AC1_IN` / `AC2_IN` are active low and are expected to use external pull-up hardware
 
@@ -90,10 +90,10 @@ Switch wiring:
 
 Important generated GPIO startup states:
 
-- `SW_COMMON` (`PH1`) starts high
 - `SR_LATCH` (`PA4`) starts low
 - `SR_OE` (`PA6`) starts high
-- `SEL_P1` and `SEL_P2` are configured with pull-downs
+- `SEL_P1` and `SEL_P2` are configured with pull-ups and treated as active-low inputs
+- `ACK_LT1` on `PH0` is configured with pull-up and treated as an active-low input
 - `ACK_LT` on `PB7` is treated as an active-low input
 
 ## LED Mapping
@@ -149,7 +149,7 @@ The project currently builds successfully with STM32CubeIDE 1.19.0 and the bundl
 Hardware validation is still required for:
 
 - Selector decode
-- ACK versus lamp test timing
+- ACK versus lamp test timing on both `ACK_LT` and `ACK_LT1`
 - Shift register byte order on the real PCB
 - Relay and LED bit mapping on hardware
 - `AC1_IN` / `AC2_IN` ready behavior
@@ -159,8 +159,8 @@ Hardware validation is still required for:
 ## Bench Checklist
 
 - Verify `OFF / PUMP 1 / PUMP 2 / INVALID` selector decoding
-- Verify short press `ACK_LT` clears the latched alarm
-- Verify long press `ACK_LT` clears alarm and lights the display LEDs
+- Verify short press on both `ACK_LT` and `ACK_LT1` clears the latched alarm
+- Verify long press on both `ACK_LT` and `ACK_LT1` clears alarm and runs the grouped lamp test
 - Verify `SR_OE` prevents relay glitching during shift register writes
 - Verify only one pump output can be active at a time
 - Verify pump starts on low pressure or inactive RPM only when the selected pump is ready

@@ -149,9 +149,9 @@ typedef struct
 #define PRESSURE_ACTIVE_LEVEL 0U
 #define RPM_ACTIVE_LEVEL 0U
 #define AC_ACTIVE_LEVEL 0U
-#define SELECTOR_ACTIVE_LEVEL 1U
+#define SELECTOR_ACTIVE_LEVEL 0U
 #define ACK_LT_ACTIVE_LEVEL 0U
-#define ACK_LT1_ACTIVE_LEVEL 1U
+#define ACK_LT1_ACTIVE_LEVEL 0U
 
 /* Timing */
 #define LOOP_DELAY_MS 20U
@@ -202,7 +202,6 @@ static PumpChannel_t g_p1_channel = {PUMP_STATE_OFF, 0U};
 static PumpChannel_t g_p2_channel = {PUMP_STATE_OFF, 0U};
 
 static uint8_t g_last_ack_raw = 0;
-static uint8_t g_last_ack_lt1_raw = 0;
 static uint32_t g_ack_press_tick = 0;
 static uint8_t g_lamp_test_active = 0;
 static uint8_t g_lamp_test_group_step = 0U;
@@ -407,15 +406,11 @@ static void ProcessInputs(void)
         if ((ack_any_now == 1U) && (g_last_ack_raw == 0U))
         {
             g_in.ack_short = 1U;
-        }
-
-        if ((ack_local_now == 1U) && (g_last_ack_lt1_raw == 0U))
-        {
             g_ack_press_tick = now;
             g_lamp_test_active = 0U;
         }
 
-        if (ack_local_now == 1U)
+        if (ack_any_now == 1U)
         {
             if ((now - g_ack_press_tick) >= T_ACK_LONGPRESS_MS)
             {
@@ -429,7 +424,6 @@ static void ProcessInputs(void)
 
         g_in.lamp_test = g_lamp_test_active;
         g_last_ack_raw = ack_any_now;
-        g_last_ack_lt1_raw = ack_local_now;
     }
 
     g_alarm_blink = (((now / T_BLINK_MS) & 0x01U) != 0U) ? 1U : 0U;
@@ -1671,9 +1665,6 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, SYS_LED1_Pin|SYS_LED2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SW_COMMON_GPIO_Port, SW_COMMON_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SR_LATCH_GPIO_Port, SR_LATCH_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
@@ -1689,15 +1680,8 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : ACK_LT1_Pin */
   GPIO_InitStruct.Pin = ACK_LT1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(ACK_LT1_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : SW_COMMON_Pin */
-  GPIO_InitStruct.Pin = SW_COMMON_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SW_COMMON_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SR_LATCH_Pin SR_OE_Pin */
   GPIO_InitStruct.Pin = SR_LATCH_Pin|SR_OE_Pin;
@@ -1709,7 +1693,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : SEL_P1_Pin SEL_P2_Pin */
   GPIO_InitStruct.Pin = SEL_P1_Pin|SEL_P2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I1_Pin I2_Pin */

@@ -36,12 +36,12 @@ The main loop then repeats continuously:
 
 ### Selector
 
-- `SEL_P1` and `SEL_P2` are active high
+- `SEL_P1` and `SEL_P2` are active low electrically
 - Decode is:
-  - `00` = `OFF`
-  - `10` = `PUMP 1`
-  - `01` = `PUMP 2`
-  - `11` = `INVALID`
+  - normalized `00` = `OFF`
+  - normalized `10` = `PUMP 1`
+  - normalized `01` = `PUMP 2`
+  - normalized `11` = `INVALID`
 
 ### Pressure
 
@@ -63,9 +63,10 @@ The main loop then repeats continuously:
 
 ### ACK / Lamp Test
 
-- `ACK_LT` is active low
-- Short press = `ACK`
-- Long press = `ACK + lamp test`
+- `ACK_LT` on `PB7` is active low
+- `ACK_LT1` on `PH0` is active low
+- Short press on either input = `ACK`
+- Long press on either input = `ACK + lamp test`
 
 Current implementation performs ACK on the press edge. If the press is held long enough, lamp test is also enabled.
 
@@ -163,7 +164,7 @@ If no test input is active:
 
 - panel LEDs step through the indicator sequence one at a time
 
-If `ACK_LT` is held active during output-test mode:
+If either ACK input is held active during output-test mode:
 
 - all relay outputs are forced off
 - panel LEDs switch to a grouped pattern test
@@ -284,21 +285,15 @@ This also means the `10 s` timeout starts again from the new pump start, not fro
 
 ### Lamp test
 
-Lamp test forces all panel indicators on together.
+Lamp test does not force all indicators on together.
 
-Intended panel indicators during lamp test:
+Instead it cycles these 3-indicator groups repeatedly:
 
-- `System ready`
-- `Pump 1 ready`
-- `Pump 1 ON`
-- `Pump 1 standby`
-- `Pump 2 ready`
-- `Pump 2 ON`
-- `Pump 2 standby`
-- `Pressure low`
-- `Standby alarm`
+- `IND9 + IND1 + IND10`
+- `IND2 + IND11 + IND3`
+- `IND12 + IND4 + IND13`
 
-If some indicators still do not light during lamp test on real hardware, that points to mapping or hardware path issues rather than the intended lamp-test behavior.
+This grouped behavior is used in all modes once the long-press threshold is reached.
 
 ## Board LED Behavior
 

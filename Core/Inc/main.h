@@ -63,8 +63,6 @@ void Error_Handler(void);
 #define SYS_LED2_GPIO_Port GPIOC
 #define ACK_LT1_Pin GPIO_PIN_0
 #define ACK_LT1_GPIO_Port GPIOH
-#define SW_COMMON_Pin GPIO_PIN_1
-#define SW_COMMON_GPIO_Port GPIOH
 #define SR_LATCH_Pin GPIO_PIN_4
 #define SR_LATCH_GPIO_Port GPIOA
 #define SR_OE_Pin GPIO_PIN_6
