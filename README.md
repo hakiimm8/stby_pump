@@ -4,12 +4,13 @@ STM32F405RGTx firmware for a manual selector-based standby pump controller built
 
 ## Overview
 
-This project controls an engine support pump system with two supported operating modes:
+This project supports three control behaviors in the source:
 
-- Single pump mode
-- Dual pump mode
+- `AUTO`
+- `MANUAL`
+- `TEST`
 
-In dual pump mode:
+In dual-pump builds:
 
 - The operator selects `OFF`, `PUMP 1`, or `PUMP 2`
 - Only one pump may run at a time
@@ -29,13 +30,26 @@ Current control logic in `Core/Src/main.c` uses these meanings:
 
 For the selected pump:
 
+In `AUTO` mode for the selected pump:
+
 1. A pump run request exists when `pressure_low` is active or `rpm` is inactive
 2. The selected pump may run only if its `ACx_IN` ready input is active
 3. If a run request exists while the selected pump is not ready, alarm latches and the pump stays off
 4. The standby pump stops only when pressure low is inactive and RPM is active
-5. `System ready` means the module is powered and running
-6. If a pump is commanded on and its feedback is still missing after `3 s`, the controller stops the pump and latches alarm until `ACK`
-7. `IND13 Standby alarm` follows that latched `3 s` no-feedback alarm
+
+In `MANUAL` mode:
+
+1. Selecting `PUMP 1` forces Pump 1 on
+2. Selecting `PUMP 2` forces Pump 2 on
+3. Selecting `OFF` turns the outputs off
+4. Pressure, RPM, AC, and feedback do not gate the output command
+5. Manual mode is open loop and does not generate standby alarm
+
+Common behavior:
+
+1. `System ready` means the module is powered and running
+2. In `AUTO`, if a commanded pump still has no matching feedback after `3 s`, the controller stops the pump and latches alarm
+3. `IND13 Standby alarm` follows that latched `3 s` no-feedback alarm in `AUTO`
 
 ## Alarm / ACK / Lamp Test
 
@@ -114,10 +128,10 @@ Important generated GPIO startup states:
 - Bit 3 = `IND12` Pump 2 standby
 - Bit 4 = `IND13` Standby alarm
 
-Bypass mode indicator meaning:
+Mode indicator meaning:
 
-- `Pump 1 standby` = selector is on Pump 1 in normal mode, or pump 1 ready and not currently running in bypass mode
-- `Pump 2 standby` = selector is on Pump 2 in normal mode, or pump 2 ready and not currently running in bypass mode
+- `Pump 1 standby` = selector is on Pump 1
+- `Pump 2 standby` = selector is on Pump 2
 
 ## Build / Import
 
@@ -163,11 +177,12 @@ Hardware validation is still required for:
 - Verify `OFF / PUMP 1 / PUMP 2 / INVALID` selector decoding
 - Verify short press on `ACK_LT1` clears the latched alarm
 - Verify long press on `ACK_LT1` clears alarm and runs the grouped lamp test
-- Verify `I5` lights `Pump 1 ON` only when Pump 1 is commanded and feedback is present
-- Verify `I8` lights `Pump 2 ON` only when Pump 2 is commanded and feedback is present
+- Verify `Pump 1 ON` follows the Pump 1 command
+- Verify `Pump 2 ON` follows the Pump 2 command
 - Verify `SR_OE` prevents relay glitching during shift register writes
-- Verify only one pump output can be active at a time
-- Verify pump starts on low pressure or inactive RPM only when the selected pump is ready
-- Verify pump stops only when pressure low clears and RPM is active
-- Verify alarm latch behavior for not-ready / invalid selector faults
+- Verify only one pump output can be active at a time in `AUTO`
+- Verify `AUTO` starts on low pressure or inactive RPM only when the selected pump is ready
+- Verify `AUTO` stops only when pressure low clears and RPM is active
+- Verify `MANUAL` follows selector directly regardless of pressure / RPM / AC / feedback
+- Verify alarm latch behavior for not-ready / invalid selector faults in `AUTO`
 - Verify `IND13 Standby alarm` only turns on after `3 s` of missing feedback while the pump is commanded on

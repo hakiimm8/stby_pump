@@ -7,10 +7,10 @@ It is intentionally written without code snippets so it can be used as an operat
 ## Scope
 
 - Main firmware file: `Core/Src/main.c`
-- Current default build: selector-driven dual-pump mode
-- Alternate modes still available in the source:
-  - bypass dual mode
-  - output test mode
+- Current default build: `AUTO`
+- Alternate modes in the source:
+  - `MANUAL`
+  - `TEST`
 
 ## Startup Sequence
 
@@ -73,13 +73,12 @@ Current implementation performs ACK on the press edge. If the press is held long
 
 - `I5` is Pump 1 feedback and is active low
 - `I8` is Pump 2 feedback and is active low
-- each `Pump ON` indicator requires both:
-  - the corresponding pump command
-  - and the matching pump feedback input
+- pump feedback is used for the `3 s` feedback-timeout alarm
+- each `Pump ON` indicator follows the corresponding pump command
 
 ## Operating Modes
 
-## Normal Mode
+## AUTO Mode
 
 This is the current default mode.
 
@@ -128,27 +127,22 @@ If the selector changes away from the currently active pump while the controller
 
 The operator must deliberately choose the desired pump.
 
-## Bypass Dual Mode
+## MANUAL Mode
 
-This mode ignores the selector and treats both pump channels independently.
+This mode uses the selector as a direct output command.
 
-Each pump channel uses its own:
+- selector `OFF` = both pumps off
+- selector `PUMP 1` = Pump 1 forced on
+- selector `PUMP 2` = Pump 2 forced on
+- selector `INVALID` = fault
 
-- pressure input
-- RPM input
-- AC ready input
+In manual mode:
 
-In bypass mode:
-
-- pump 1 can run independently from pump 2
-- pump 2 can run independently from pump 1
-- both pumps may run at the same time
-
-The same demand and permission logic is used per channel:
-
-- run request = pressure low active or RPM inactive
-- run allowed only if AC ready is active
-- stop when pressure low is inactive and RPM is active
+- pressure does not decide start or stop
+- RPM does not decide start or stop
+- AC ready does not gate the output
+- feedback is ignored for start, stop, and alarm
+- standby alarm stays off
 
 ## Output Test Mode
 
@@ -197,9 +191,9 @@ This is the main latched alarm state used for system health.
 
 It can be caused by:
 
-- invalid selector
-- demand exists while the selected pump is not ready
-- feedback-timeout fault
+- invalid selector in `AUTO`
+- in `AUTO`, demand exists while the selected pump is not ready
+- feedback-timeout fault in `AUTO`
 
 This alarm affects:
 
@@ -216,7 +210,7 @@ It is a subset of the general alarm behavior.
 
 ## Feedback-Timeout Logic
 
-This is the current rule for the latched `Standby alarm`:
+This is the current `AUTO` rule for the latched `Standby alarm`:
 
 1. A pump starts running
 2. The firmware begins counting from the pump run start time
@@ -231,6 +225,12 @@ If feedback appears before the `3 s` expires:
 
 - the feedback-timeout fault does not occur
 
+If feedback appears after the fault has latched:
+
+- the feedback-timeout latch clears automatically
+- `Standby alarm` turns off
+- the controller can return to normal operation without `ACK`
+
 If the pump is not allowed to start because AC ready is absent:
 
 - the low-pressure indicator still works normally
@@ -241,9 +241,9 @@ If the pump is not allowed to start because AC ready is absent:
 
 ACK clears the latched alarm state.
 
-For the feedback-timeout case specifically:
+For the `AUTO` feedback-timeout case specifically:
 
-- ACK clears the latched timeout alarm
+- ACK still clears the latched timeout alarm manually
 - `Standby alarm` turns off
 - the module returns to normal operation again
 
@@ -265,8 +265,7 @@ This also means the `3 s` timeout starts again from the new pump start, not from
   - on when pump 1 command is active
 
 - `IND2 Pump 1 standby`
-  - in normal mode: on when selector is on pump 1
-  - in bypass mode: on when pump 1 is ready and not currently running
+  - on when selector is on pump 1
 
 - `IND11 Pump 2 ready`
   - follows pump 2 AC ready input
@@ -275,16 +274,15 @@ This also means the `3 s` timeout starts again from the new pump start, not from
   - on when pump 2 command is active
 
 - `IND12 Pump 2 standby`
-  - in normal mode: on when selector is on pump 2
-  - in bypass mode: on when pump 2 is ready and not currently running
+  - on when selector is on pump 2
 
 - `IND4 Pressure low`
   - shows active demand
-  - in normal mode it reflects either pump pressure input
-  - in bypass mode it reflects combined channel demand
+  - reflects either pump pressure input
 
 - `IND13 Standby alarm`
-  - follows the latched feedback-timeout fault
+  - in `AUTO`, follows the latched feedback-timeout fault
+  - in `MANUAL`, stays off
   - blinks using the common blink timing
 
 ### Lamp test
@@ -332,7 +330,9 @@ LED banks are straight mapped:
 
 The current firmware behaves as a selector-driven standby pump controller with these main rules:
 
-- demand comes from pressure low or RPM inactive
+- in `AUTO`, demand comes from pressure low or RPM inactive
+- in `MANUAL`, selector directly forces the pump output
+- in `MANUAL`, feedback is ignored completely
 - a selected pump can only run if its AC ready input is active
 - the pump stops when pressure low clears and RPM is active
 - invalid selector and not-ready demand latch the general alarm

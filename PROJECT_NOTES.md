@@ -16,16 +16,17 @@ This file is intended to capture project knowledge that is easy to lose between 
 - IDE: `STM32CubeIDE 1.19.0`
 - Framework: STM32 HAL / CubeMX generated project
 - Main application file: `Core/Src/main.c`
-- Current application mode in code: `dual pump mode`
+- Current application mode in code: `AUTO`
 
 ## Control Philosophy
 
 - Manual selector-based pump controller
-- Modes supported by code:
-  - single pump mode
-  - dual pump mode
-- Current build is configured for `dual pump mode`
-- In dual mode:
+- Control modes supported by code:
+  - `AUTO`
+  - `MANUAL`
+  - `TEST`
+- Current build is configured for `AUTO`
+- In dual-pump builds:
   - selector chooses `OFF`, `PUMP 1`, or `PUMP 2`
   - only one pump may run at a time
   - no automatic transfer to the other pump
@@ -95,8 +96,8 @@ GPIO assumptions:
 
 - `I5` = Pump 1 feedback, active low, external pull-up hardware
 - `I8` = Pump 2 feedback, active low, external pull-up hardware
-- `Pump 1 ON` requires Pump 1 command and `I5`
-- `Pump 2 ON` requires Pump 2 command and `I8`
+- `Pump 1 ON` follows the Pump 1 command
+- `Pump 2 ON` follows the Pump 2 command
 
 ## DC / Pump IO Mapping
 
@@ -223,21 +224,33 @@ Current logic meaning:
 
 - `System ready` = module powered and firmware running
 - `Pump ready` = `ACx_IN` ready input is active
-- `Pump ON` = pump command active and matching pump feedback active
-- `Pump standby` = in normal mode, selected pump indicator; in bypass mode, pump ready and not currently on
+- `Pump ON` = pump command active
+- `Pump standby` = selected pump indicator
 - `Pressure low` = demand active
 - `Standby alarm` = latched `3 s` no-feedback alarm, blinking on the module indicator
 
 ## State Machine Notes
 
-Current run/stop rules for the selected pump:
+`AUTO` mode rules for the selected pump:
 
 1. run request exists when `pressure_low` is active or `rpm` is inactive
 2. pump may run only if `ACx_IN` for that pump is active
 3. if run is requested while the selected pump is not ready, alarm latches and the pump stays off
 4. pump stops only when `pressure_low` is inactive and `rpm` is active
-5. if a commanded pump still has no feedback after `3 s`, the pump stops and the alarm latches
-6. ACK clears the latched alarm and returns the module to normal operation again
+
+`MANUAL` mode rules:
+
+1. selector `PUMP 1` forces Pump 1 on
+2. selector `PUMP 2` forces Pump 2 on
+3. selector `OFF` turns outputs off
+4. pressure, RPM, AC, and feedback do not gate the output command
+5. manual mode is open loop and does not use standby alarm
+
+Common fault rule:
+
+1. in `AUTO`, if a commanded pump still has no feedback after `3 s`, the pump stops and the alarm latches
+2. if the matching feedback later appears, that feedback-timeout latch clears automatically
+3. ACK clears the latched alarm and returns the module to normal operation again
 
 Fault causes include:
 
