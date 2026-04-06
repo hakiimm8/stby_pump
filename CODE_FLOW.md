@@ -74,7 +74,7 @@ Current implementation performs ACK on the press edge. If the press is held long
 - `I5` is Pump 1 feedback and is active low
 - `I8` is Pump 2 feedback and is active low
 - pump feedback is used for the `3 s` feedback-timeout alarm
-- each `Pump ON` indicator follows the corresponding pump command
+- each `Pump ON` indicator follows the corresponding pump feedback input
 
 ## Operating Modes
 

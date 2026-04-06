@@ -177,8 +177,8 @@ Hardware validation is still required for:
 - Verify `OFF / PUMP 1 / PUMP 2 / INVALID` selector decoding
 - Verify short press on `ACK_LT1` clears the latched alarm
 - Verify long press on `ACK_LT1` clears alarm and runs the grouped lamp test
-- Verify `Pump 1 ON` follows the Pump 1 command
-- Verify `Pump 2 ON` follows the Pump 2 command
+- Verify `Pump 1 ON` follows Pump 1 feedback, including local running
+- Verify `Pump 2 ON` follows Pump 2 feedback, including local running
 - Verify `SR_OE` prevents relay glitching during shift register writes
 - Verify only one pump output can be active at a time in `AUTO`
 - Verify `AUTO` starts on low pressure or inactive RPM only when the selected pump is ready

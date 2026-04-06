@@ -1185,14 +1185,14 @@ static MAYBE_UNUSED void RunAutoModeSection(void)
 
     g_out.ind1_system_ready = 1U;
     g_out.ind2_p1_ready = P1Ready();
-    g_out.ind3_p1_on = g_out.pump1_cmd;
+    g_out.ind3_p1_on = g_in.fb_p1;
 #if (APP_MODE == APP_MODE_DUAL_PUMP_CFG)
     g_out.ind4_p1_standby = (g_in.selector == SELECTOR_P1) ? 1U : 0U;
 #else
     g_out.ind4_p1_standby = 0U;
 #endif
     g_out.ind5_p2_ready = P2Ready();
-    g_out.ind6_p2_on = g_out.pump2_cmd;
+    g_out.ind6_p2_on = g_in.fb_p2;
 #if (APP_MODE == APP_MODE_DUAL_PUMP_CFG)
     g_out.ind7_p2_standby = (g_in.selector == SELECTOR_P2) ? 1U : 0U;
 #else
@@ -1250,10 +1250,10 @@ static MAYBE_UNUSED void RunManualModeSection(void)
 
     g_out.ind1_system_ready = 1U;
     g_out.ind2_p1_ready = g_in.ac_p1;
-    g_out.ind3_p1_on = g_out.pump1_cmd;
+    g_out.ind3_p1_on = g_in.fb_p1;
     g_out.ind4_p1_standby = pump1_selected;
     g_out.ind5_p2_ready = g_in.ac_p2;
-    g_out.ind6_p2_on = g_out.pump2_cmd;
+    g_out.ind6_p2_on = g_in.fb_p2;
     g_out.ind7_p2_standby = pump2_selected;
     g_out.ind8_pressure_low = (uint8_t)(g_in.pressure_p1 || g_in.pressure_p2);
     g_out.ind9_standby_alarm = 0U;

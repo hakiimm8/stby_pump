@@ -96,8 +96,8 @@ GPIO assumptions:
 
 - `I5` = Pump 1 feedback, active low, external pull-up hardware
 - `I8` = Pump 2 feedback, active low, external pull-up hardware
-- `Pump 1 ON` follows the Pump 1 command
-- `Pump 2 ON` follows the Pump 2 command
+- `Pump 1 ON` follows the Pump 1 feedback input
+- `Pump 2 ON` follows the Pump 2 feedback input
 
 ## DC / Pump IO Mapping
 
@@ -224,7 +224,7 @@ Current logic meaning:
 
 - `System ready` = module powered and firmware running
 - `Pump ready` = `ACx_IN` ready input is active
-- `Pump ON` = pump command active
+- `Pump ON` = matching pump feedback active
 - `Pump standby` = selected pump indicator
 - `Pressure low` = demand active
 - `Standby alarm` = latched `3 s` no-feedback alarm, blinking on the module indicator
