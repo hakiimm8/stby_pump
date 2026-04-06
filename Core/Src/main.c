@@ -49,13 +49,14 @@ typedef struct
 {
     uint8_t pressure_p1_raw;
     uint8_t rpm_p1_raw;
+    uint8_t fb_p1_raw;
     uint8_t pressure_p2_raw;
     uint8_t rpm_p2_raw;
+    uint8_t fb_p2_raw;
 
     uint8_t ac_p1_raw;
     uint8_t ac_p2_raw;
 
-    uint8_t contactor_fb_raw;
     uint8_t ack_lt1_raw;
     uint8_t sel_p1_raw;
     uint8_t sel_p2_raw;
@@ -65,12 +66,13 @@ typedef struct
 {
     uint8_t pressure_p1;
     uint8_t rpm_p1;
+    uint8_t fb_p1;
     uint8_t pressure_p2;
     uint8_t rpm_p2;
+    uint8_t fb_p2;
 
     uint8_t ac_p1;
     uint8_t ac_p2;
-    uint8_t contactor_fb;
 
     uint8_t ack_short;
     uint8_t lamp_test;
@@ -79,7 +81,6 @@ typedef struct
 
 typedef struct
 {
-    uint8_t failure_ams;
     uint8_t pump1_cmd;
     uint8_t pump2_cmd;
 
@@ -150,7 +151,7 @@ typedef struct
 #define PRESSURE_ACTIVE_LEVEL 0U
 #define RPM_ACTIVE_LEVEL 0U
 #define AC_ACTIVE_LEVEL 0U
-#define CONTACTOR_FB_ACTIVE_LEVEL 0U
+#define FEEDBACK_ACTIVE_LEVEL 0U
 #define SELECTOR_ACTIVE_LEVEL 0U
 #define ACK_LT1_ACTIVE_LEVEL 0U
 
@@ -228,7 +229,8 @@ static uint8_t db_ac_p1 = 0;
 static uint8_t db_ac_p2 = 0;
 static uint8_t db_sel_p1 = 0;
 static uint8_t db_sel_p2 = 0;
-static uint8_t db_contactor_fb = 0;
+static uint8_t db_fb_p1 = 0;
+static uint8_t db_fb_p2 = 0;
 static uint8_t db_ack_lt1 = 0;
 
 static uint32_t db_tick_pressure_p1 = 0;
@@ -239,7 +241,8 @@ static uint32_t db_tick_ac_p1 = 0;
 static uint32_t db_tick_ac_p2 = 0;
 static uint32_t db_tick_sel_p1 = 0;
 static uint32_t db_tick_sel_p2 = 0;
-static uint32_t db_tick_contactor_fb = 0;
+static uint32_t db_tick_fb_p1 = 0;
+static uint32_t db_tick_fb_p2 = 0;
 static uint32_t db_tick_ack_lt1 = 0;
 
 /* USER CODE END PV */
@@ -333,27 +336,28 @@ static void DebounceBit(uint8_t raw, uint8_t *db, uint32_t *tick, uint32_t debou
 
 static void ReadRawInputs(void)
 {
-    /* New DC order:
-       I1 = unused / reserved (not read)
-       I2 = Output Pump 1     (not read)
-       I3 = Output Pump 2     (not read)
-       I4 = Pressure switch Pump 1
-       I5 = RPM switch Pump 1
-       I6 = Pressure switch Pump 2
-       I7 = RPM switch Pump 2
-       I8 = Contactor feedback
+    /* DC IO map:
+       1 = Output pump 1
+       2 = Output pump 2
+       3 = Pressure switch pump 1
+       4 = RPM switch pump 1
+       5 = Feedback pump 1
+       6 = Pressure switch pump 2
+       7 = RPM switch pump 2
+       8 = Feedback pump 2
     */
 
-    g_raw.pressure_p1_raw = PIN_IS_ACTIVE(I4_GPIO_Port, I4_Pin);
-    g_raw.rpm_p1_raw = PIN_IS_ACTIVE(I5_GPIO_Port, I5_Pin);
+    g_raw.pressure_p1_raw = PIN_IS_ACTIVE(I3_GPIO_Port, I3_Pin);
+    g_raw.rpm_p1_raw = PIN_IS_ACTIVE(I4_GPIO_Port, I4_Pin);
+    g_raw.fb_p1_raw = PIN_IS_ACTIVE(I5_GPIO_Port, I5_Pin);
 
     g_raw.pressure_p2_raw = PIN_IS_ACTIVE(I6_GPIO_Port, I6_Pin);
     g_raw.rpm_p2_raw = PIN_IS_ACTIVE(I7_GPIO_Port, I7_Pin);
+    g_raw.fb_p2_raw = PIN_IS_ACTIVE(I8_GPIO_Port, I8_Pin);
 
     g_raw.ac_p1_raw = PIN_IS_ACTIVE(AC1_IN_GPIO_Port, AC1_IN_Pin);
     g_raw.ac_p2_raw = PIN_IS_ACTIVE(AC2_IN_GPIO_Port, AC2_IN_Pin);
 
-    g_raw.contactor_fb_raw = PIN_IS_ACTIVE(CONTACTOR_FB_GPIO_Port, CONTACTOR_FB_Pin);
     g_raw.ack_lt1_raw = PIN_IS_ACTIVE(ACK_LT1_GPIO_Port, ACK_LT1_Pin);
     g_raw.sel_p1_raw = PIN_IS_ACTIVE(SEL_P1_GPIO_Port, SEL_P1_Pin);
     g_raw.sel_p2_raw = PIN_IS_ACTIVE(SEL_P2_GPIO_Port, SEL_P2_Pin);
@@ -365,23 +369,25 @@ static void ProcessInputs(void)
 
     DebounceBit(g_raw.pressure_p1_raw, &db_pressure_p1, &db_tick_pressure_p1, T_DEBOUNCE_MS);
     DebounceBit(g_raw.rpm_p1_raw, &db_rpm_p1, &db_tick_rpm_p1, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.fb_p1_raw, &db_fb_p1, &db_tick_fb_p1, T_DEBOUNCE_MS);
     DebounceBit(g_raw.pressure_p2_raw, &db_pressure_p2, &db_tick_pressure_p2, T_DEBOUNCE_MS);
     DebounceBit(g_raw.rpm_p2_raw, &db_rpm_p2, &db_tick_rpm_p2, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.fb_p2_raw, &db_fb_p2, &db_tick_fb_p2, T_DEBOUNCE_MS);
     DebounceBit(g_raw.ac_p1_raw, &db_ac_p1, &db_tick_ac_p1, T_DEBOUNCE_MS);
     DebounceBit(g_raw.ac_p2_raw, &db_ac_p2, &db_tick_ac_p2, T_DEBOUNCE_MS);
     DebounceBit(g_raw.sel_p1_raw, &db_sel_p1, &db_tick_sel_p1, T_DEBOUNCE_MS);
     DebounceBit(g_raw.sel_p2_raw, &db_sel_p2, &db_tick_sel_p2, T_DEBOUNCE_MS);
-    DebounceBit(g_raw.contactor_fb_raw, &db_contactor_fb, &db_tick_contactor_fb, T_DEBOUNCE_MS);
     DebounceBit(g_raw.ack_lt1_raw, &db_ack_lt1, &db_tick_ack_lt1, T_ACK_DEBOUNCE_MS);
 
     g_in.pressure_p1 = NormalizeLevel(db_pressure_p1, PRESSURE_ACTIVE_LEVEL);
     g_in.rpm_p1 = NormalizeLevel(db_rpm_p1, RPM_ACTIVE_LEVEL);
+    g_in.fb_p1 = NormalizeLevel(db_fb_p1, FEEDBACK_ACTIVE_LEVEL);
     g_in.pressure_p2 = NormalizeLevel(db_pressure_p2, PRESSURE_ACTIVE_LEVEL);
     g_in.rpm_p2 = NormalizeLevel(db_rpm_p2, RPM_ACTIVE_LEVEL);
+    g_in.fb_p2 = NormalizeLevel(db_fb_p2, FEEDBACK_ACTIVE_LEVEL);
 
     g_in.ac_p1 = NormalizeLevel(db_ac_p1, AC_ACTIVE_LEVEL);
     g_in.ac_p2 = NormalizeLevel(db_ac_p2, AC_ACTIVE_LEVEL);
-    g_in.contactor_fb = NormalizeLevel(db_contactor_fb, CONTACTOR_FB_ACTIVE_LEVEL);
 
     {
         uint8_t sel1 = NormalizeLevel(db_sel_p1, SELECTOR_ACTIVE_LEVEL);
@@ -521,24 +527,26 @@ static void PrimeDebouncedInputs(void)
 
     db_pressure_p1 = g_raw.pressure_p1_raw;
     db_rpm_p1 = g_raw.rpm_p1_raw;
+    db_fb_p1 = g_raw.fb_p1_raw;
     db_pressure_p2 = g_raw.pressure_p2_raw;
     db_rpm_p2 = g_raw.rpm_p2_raw;
+    db_fb_p2 = g_raw.fb_p2_raw;
     db_ac_p1 = g_raw.ac_p1_raw;
     db_ac_p2 = g_raw.ac_p2_raw;
     db_sel_p1 = g_raw.sel_p1_raw;
     db_sel_p2 = g_raw.sel_p2_raw;
-    db_contactor_fb = g_raw.contactor_fb_raw;
     db_ack_lt1 = g_raw.ack_lt1_raw;
 
     db_tick_pressure_p1 = now;
     db_tick_rpm_p1 = now;
+    db_tick_fb_p1 = now;
     db_tick_pressure_p2 = now;
     db_tick_rpm_p2 = now;
+    db_tick_fb_p2 = now;
     db_tick_ac_p1 = now;
     db_tick_ac_p2 = now;
     db_tick_sel_p1 = now;
     db_tick_sel_p2 = now;
-    db_tick_contactor_fb = now;
     db_tick_ack_lt1 = now;
 }
 
@@ -1201,7 +1209,7 @@ static void RunOutputTestProgram(void)
     if ((ack_active == 0U) && ((now - g_test_relay_tick) >= T_OUTPUT_TEST_STEP_MS))
     {
         g_test_relay_tick = now;
-        g_test_relay_step = (uint8_t)((g_test_relay_step + 1U) % 4U);
+        g_test_relay_step = (uint8_t)((g_test_relay_step + 1U) % 3U);
     }
 
     if (ack_active == 0U)
@@ -1209,17 +1217,14 @@ static void RunOutputTestProgram(void)
         switch (g_test_relay_step)
         {
         case 0:
-            g_out.failure_ams = 1U;
-            break;
-        case 1:
             g_out.pump1_cmd = 1U;
             break;
-        case 2:
+        case 1:
             g_out.pump2_cmd = 1U;
             break;
-        case 3:
+        case 2:
         default:
-            /* 200 ms break before the relay sequence repeats from Q1. */
+            /* 200 ms break before the relay sequence repeats. */
             break;
         }
     }
@@ -1277,19 +1282,27 @@ static void RunOutputTestProgram(void)
     }
     else if (g_in.pressure_p1)
     {
-        g_out.ind1_system_ready = 1U;  /* I4 -> IND9 */
+        g_out.ind1_system_ready = 1U;  /* IO3 -> IND9 */
     }
     else if (g_in.rpm_p1)
     {
-        g_out.ind2_p1_ready = 1U;      /* I5 -> IND1 */
+        g_out.ind2_p1_ready = 1U;      /* IO4 -> IND1 */
+    }
+    else if (g_in.fb_p1)
+    {
+        g_out.ind3_p1_on = 1U;         /* IO5 -> IND10 */
     }
     else if (g_in.pressure_p2)
     {
-        g_out.ind3_p1_on = 1U;         /* I6 -> IND10 */
+        g_out.ind4_p1_standby = 1U;    /* IO6 -> IND2 */
     }
     else if (g_in.rpm_p2)
     {
-        g_out.ind4_p1_standby = 1U;    /* I7 -> IND2 */
+        g_out.ind5_p2_ready = 1U;      /* IO7 -> IND11 */
+    }
+    else if (g_in.fb_p2)
+    {
+        g_out.ind6_p2_on = 1U;         /* IO8 -> IND3 */
     }
     else
     {
@@ -1331,14 +1344,14 @@ static MAYBE_UNUSED void RunNormalModeSection(void)
 
     g_out.ind1_system_ready = 1U;
     g_out.ind2_p1_ready = P1Ready();
-    g_out.ind3_p1_on = (uint8_t)(g_out.pump1_cmd && g_in.contactor_fb);
+    g_out.ind3_p1_on = (uint8_t)(g_out.pump1_cmd && g_in.fb_p1);
 #if (APP_MODE == APP_MODE_DUAL_PUMP_CFG)
     g_out.ind4_p1_standby = (g_in.selector == SELECTOR_P2) ? 1U : 0U;
 #else
     g_out.ind4_p1_standby = 0U;
 #endif
     g_out.ind5_p2_ready = P2Ready();
-    g_out.ind6_p2_on = (uint8_t)(g_out.pump2_cmd && g_in.contactor_fb);
+    g_out.ind6_p2_on = (uint8_t)(g_out.pump2_cmd && g_in.fb_p2);
 #if (APP_MODE == APP_MODE_DUAL_PUMP_CFG)
     g_out.ind7_p2_standby = (g_in.selector == SELECTOR_P1) ? 1U : 0U;
 #else
@@ -1350,11 +1363,6 @@ static MAYBE_UNUSED void RunNormalModeSection(void)
          g_alarm_blink)
             ? 1U
             : 0U;
-
-    if ((g_fault_latched_mask & (FAULT_P1_PRESSURE_TIMEOUT_MASK | FAULT_P2_PRESSURE_TIMEOUT_MASK)) != 0U)
-    {
-        g_out.failure_ams = 1U;
-    }
 
     ApplyLampTestIfNeeded();
 }
@@ -1403,19 +1411,14 @@ static MAYBE_UNUSED void RunBypassModeSection(void)
     g_alarm_latched = (bypass_latched_mask != 0U) ? 1U : 0U;
     g_out.ind1_system_ready = 1U;
     g_out.ind2_p1_ready = g_in.ac_p1;
-    g_out.ind3_p1_on = (uint8_t)(g_out.pump1_cmd && g_in.contactor_fb);
+    g_out.ind3_p1_on = (uint8_t)(g_out.pump1_cmd && g_in.fb_p1);
     g_out.ind4_p1_standby = (uint8_t)(g_in.ac_p1 && !g_out.pump1_cmd);
     g_out.ind5_p2_ready = g_in.ac_p2;
-    g_out.ind6_p2_on = (uint8_t)(g_out.pump2_cmd && g_in.contactor_fb);
+    g_out.ind6_p2_on = (uint8_t)(g_out.pump2_cmd && g_in.fb_p2);
     g_out.ind7_p2_standby = (uint8_t)(g_in.ac_p2 && !g_out.pump2_cmd);
     g_out.ind8_pressure_low = (uint8_t)(g_in.pressure_p1 || g_in.pressure_p2);
     g_out.ind9_standby_alarm =
         ((bypass_pressure_timeout_latched_mask != 0U) && g_alarm_blink) ? 1U : 0U;
-
-    if (bypass_pressure_timeout_latched_mask != 0U)
-    {
-        g_out.failure_ams = 1U;
-    }
 
     ApplyLampTestIfNeeded();
 }
@@ -1459,19 +1462,17 @@ static void UpdateOutputs(void)
     uint8_t led_byte_1 = 0U; /* U3 = IND1..IND8 */
     uint8_t led_byte_2 = 0U; /* U6 = IND9..IND16 */
 
-    /* New DC order:
-       Q1 = Failure AMS
-       Q2 = Pump 1 output
-       Q3 = Pump 2 output
+    /* DC output order:
+       Q1 = Output pump 1
+       Q2 = Output pump 2
+       Q3 = unused / reserved
     */
 
     /* Relay board wiring is reversed: QA..QH drive Q8..Q1 through the ULN stage. */
-    if (g_out.failure_ams)
-        relay_byte |= (1U << 7); /* Q1 = Failure AMS */
     if (g_out.pump1_cmd)
-        relay_byte |= (1U << 6); /* Q2 = Output pump 1 */
+        relay_byte |= (1U << 7); /* Q1 = Output pump 1 */
     if (g_out.pump2_cmd)
-        relay_byte |= (1U << 5); /* Q3 = Output pump 2 */
+        relay_byte |= (1U << 6); /* Q2 = Output pump 2 */
 
     /* U3 : IND1..IND8 */
     if (g_out.ind2_p1_ready)
@@ -1677,11 +1678,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : ACK_LT1_Pin */
-  GPIO_InitStruct.Pin = ACK_LT1_Pin;
+  /*Configure GPIO pins : ACK_LT1_Pin PH1_Pin */
+  GPIO_InitStruct.Pin = ACK_LT1_Pin|PH1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(ACK_LT1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SR_LATCH_Pin SR_OE_Pin */
   GPIO_InitStruct.Pin = SR_LATCH_Pin|SR_OE_Pin;
@@ -1709,9 +1710,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(I3_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I4_Pin I5_Pin I6_Pin I7_Pin
-                           CONTACTOR_FB_Pin AC1_IN_Pin AC2_IN_Pin */
+                           I8_Pin AC1_IN_Pin AC2_IN_Pin */
   GPIO_InitStruct.Pin = I4_Pin|I5_Pin|I6_Pin|I7_Pin
-                          |CONTACTOR_FB_Pin|AC1_IN_Pin|AC2_IN_Pin;
+                          |I8_Pin|AC1_IN_Pin|AC2_IN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);

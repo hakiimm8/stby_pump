@@ -40,7 +40,12 @@ These are currently treated as active low in `Core/Src/main.c`:
 - `SEL_P1`
 - `SEL_P2`
 - `ACK_LT1`
-- `CONTACTOR_FB`
+- `I3`
+- `I4`
+- `I5`
+- `I6`
+- `I7`
+- `I8`
 - `AC1_IN`
 - `AC2_IN`
 - `IN Pressure switch pump 1`
@@ -60,7 +65,7 @@ Current polarity defines:
 - `AC_ACTIVE_LEVEL = 0U`
 - `SELECTOR_ACTIVE_LEVEL = 0U`
 - `ACK_LT1_ACTIVE_LEVEL = 0U`
-- `CONTACTOR_FB_ACTIVE_LEVEL = 0U`
+- `FEEDBACK_ACTIVE_LEVEL = 0U`
 
 ## Selector Wiring
 
@@ -86,33 +91,35 @@ GPIO assumptions:
 - short press = ACK
 - long press = ACK + lamp test
 
-## Contactor Feedback
+## Pump Feedback
 
-- `CONTACTOR_FB` on `PB7` is active low and uses external pull-up hardware
-- it is a single shared ORed feedback from the pump contactor auxiliaries
-- `Pump 1 ON` and `Pump 2 ON` indicators require:
-  - the corresponding pump command to be active
-  - and `CONTACTOR_FB` to be active
+- `I5` = Pump 1 feedback, active low, external pull-up hardware
+- `I8` = Pump 2 feedback, active low, external pull-up hardware
+- `Pump 1 ON` requires Pump 1 command and `I5`
+- `Pump 2 ON` requires Pump 2 command and `I8`
 
 ## DC / Pump IO Mapping
 
 ### New DC order
 
-- `Q1` = Output Failure AMS
-- `Q2` = Output pump 1
-- `Q3` = Output pump 2
-- `I4` = IN Pressure switch pump 1
-- `I5` = IN RPM switch pump 1
+- `Q1` = Output pump 1
+- `Q2` = Output pump 2
+- `Q3` = unused / reserved
+- `I3` = IN Pressure switch pump 1
+- `I4` = IN RPM switch pump 1
+- `I5` = IN Feedback pump 1
 - `I6` = IN Pressure switch pump 2
 - `I7` = IN RPM switch pump 2
+- `I8` = IN Feedback pump 2
 
 ### MCU direct input pins
 
+- `I3` -> `PD2`
 - `I4` -> `PB3`
 - `I5` -> `PB4`
 - `I6` -> `PB5`
 - `I7` -> `PB6`
-- `CONTACTOR_FB` -> `PB7`
+- `I8` -> `PB7`
 - `ACK_LT1` -> `PH0`
 - `AC1_IN` -> `PB8`
 - `AC2_IN` -> `PB9`
@@ -177,9 +184,9 @@ Effective mapping for the relay byte:
 
 Current code was updated to match this for the used outputs:
 
-- `Failure AMS` -> `bit 7`
-- `Pump 1` -> `bit 6`
-- `Pump 2` -> `bit 5`
+- `Pump 1` -> `bit 7`
+- `Pump 2` -> `bit 6`
+- `Q3 unused` -> `bit 5`
 
 ### LED boards are straight
 
@@ -216,11 +223,10 @@ Current logic meaning:
 
 - `System ready` = module powered and firmware running
 - `Pump ready` = `ACx_IN` ready input is active
-- `Pump ON` = pump command active and contactor feedback active
+- `Pump ON` = pump command active and matching pump feedback active
 - `Pump standby` = in normal mode, opposite pump selected; in bypass mode, pump ready and not currently on
 - `Pressure low` = demand active
-- `Standby alarm` = same latched `10 s` pressure-timeout alarm as `Failure AMS`, blinking on the module indicator
-- `Failure AMS` = live control uses it only for the `10 s` pressure-timeout fault; output test still drives it in sequence
+- `Standby alarm` = latched `10 s` pressure-timeout alarm, blinking on the module indicator
 
 ## State Machine Notes
 
@@ -230,7 +236,7 @@ Current run/stop rules for the selected pump:
 2. pump may run only if `ACx_IN` for that pump is active
 3. if run is requested while the selected pump is not ready, alarm latches and the pump stays off
 4. pump stops only when `pressure_low` is inactive and `rpm` is active
-5. if a running pump sees `pressure_low` stay active for `10 s`, the pump stops, alarm latches, and `Failure AMS` turns on
+5. if a running pump sees `pressure_low` stay active for `10 s`, the pump stops and the alarm latches
 6. ACK clears the latched alarm and returns the module to normal operation again
 
 Fault causes include:

@@ -69,13 +69,13 @@ The main loop then repeats continuously:
 
 Current implementation performs ACK on the press edge. If the press is held long enough, lamp test is also enabled.
 
-### Contactor Feedback
+### Pump Feedback
 
-- `CONTACTOR_FB` on `PB7` is active low
-- it is a single shared feedback input from the pump contactor auxiliaries
-- the `Pump ON` indicators require both:
+- `I5` is Pump 1 feedback and is active low
+- `I8` is Pump 2 feedback and is active low
+- each `Pump ON` indicator requires both:
   - the corresponding pump command
-  - and active contactor feedback
+  - and the matching pump feedback input
 
 ## Operating Modes
 
@@ -158,10 +158,9 @@ This mode is for bench checking outputs and indicator mapping, not for control.
 
 The relay outputs cycle in this order:
 
-1. `Failure AMS`
-2. `Pump 1`
-3. `Pump 2`
-4. break
+1. `Pump 1`
+2. `Pump 2`
+3. break
 
 Each step uses the configured output-test repeat time.
 
@@ -211,22 +210,20 @@ This alarm affects:
 
 This is the specific alarm that drives:
 
-- `Failure AMS`
 - `Standby alarm` indicator
 
 It is a subset of the general alarm behavior.
 
 ## Pressure-Timeout Logic
 
-This is the current rule for `Failure AMS` and `Standby alarm`:
+This is the current rule for the latched `Standby alarm`:
 
 1. A pump starts running
 2. The firmware begins counting from the pump run start time
 3. If low pressure is still active after `10 s`, a pressure-timeout fault occurs
 4. The pump is turned off
 5. The alarm is latched
-6. `Failure AMS` turns on
-7. `Standby alarm` blinks on the module front panel
+6. `Standby alarm` blinks on the module front panel
 
 This timeout is checked from pump run start, not from a separate background timer.
 
@@ -238,7 +235,7 @@ If the pump is not allowed to start because AC ready is absent:
 
 - the low-pressure indicator still works normally
 - the pump stays off
-- `Failure AMS` does not turn on from that condition alone
+- no extra relay output turns on from that condition alone
 
 ## ACK Behavior
 
@@ -247,7 +244,7 @@ ACK clears the latched alarm state.
 For the pressure-timeout case specifically:
 
 - ACK clears the latched timeout alarm
-- `Failure AMS` turns off
+- `Standby alarm` turns off
 - the module returns to normal operation again
 
 After ACK, if demand still exists and the selected pump is ready, the system is allowed to start the pump again as a fresh cycle.
@@ -287,7 +284,7 @@ This also means the `10 s` timeout starts again from the new pump start, not fro
   - in bypass mode it reflects combined channel demand
 
 - `IND13 Standby alarm`
-  - follows the same latched pressure-timeout fault as `Failure AMS`
+  - follows the latched pressure-timeout fault
   - blinks using the common blink timing
 
 ### Lamp test
@@ -320,9 +317,9 @@ The relay board is reversed relative to the `74HC595` bit order.
 
 Current effective mapping:
 
-- relay bit 7 = `Q1 = Failure AMS`
-- relay bit 6 = `Q2 = Pump 1`
-- relay bit 5 = `Q3 = Pump 2`
+- relay bit 7 = `Q1 = Pump 1`
+- relay bit 6 = `Q2 = Pump 2`
+- relay bit 5 = `Q3 = unused`
 
 ### LED outputs
 
@@ -339,5 +336,5 @@ The current firmware behaves as a selector-driven standby pump controller with t
 - a selected pump can only run if its AC ready input is active
 - the pump stops when pressure low clears and RPM is active
 - invalid selector and not-ready demand latch the general alarm
-- `Failure AMS` and `Standby alarm` are reserved specifically for the `10 s` pressure-timeout failure after a pump has been running
+- `Standby alarm` is reserved specifically for the `10 s` pressure-timeout failure after a pump has been running
 - ACK returns the controller to normal operation again

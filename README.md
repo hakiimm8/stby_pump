@@ -34,8 +34,8 @@ For the selected pump:
 3. If a run request exists while the selected pump is not ready, alarm latches and the pump stays off
 4. The standby pump stops only when pressure low is inactive and RPM is active
 5. `System ready` means the module is powered and running
-6. If a pump is running and pressure stays low for `10 s`, the controller stops the pump, latches alarm, and turns on `Failure AMS` until `ACK`
-7. `IND13 Standby alarm` follows the same latched `10 s` pressure-timeout alarm as `Failure AMS`
+6. If a pump is running and pressure stays low for `10 s`, the controller stops the pump and latches alarm until `ACK`
+7. `IND13 Standby alarm` follows that latched `10 s` pressure-timeout alarm
 
 ## Alarm / ACK / Lamp Test
 
@@ -61,18 +61,19 @@ Shift register chain:
 
 Relay/DC mapping:
 
-- Relay bit 7 = `Failure AMS`
-- Relay bit 6 = `Pump 1 command`
-- Relay bit 5 = `Pump 2 command`
+- Relay bit 7 = `Pump 1 command`
+- Relay bit 6 = `Pump 2 command`
+- Relay bit 5 = unused / reserved
 - Relay bits are reversed at the board interface because the relay `74HC595` / `ULN2803A` path lands on `Q8..Q1`
 
 Inputs:
 
-- `I4` = Pressure switch pump 1
-- `I5` = RPM switch pump 1
+- `I3` = Pressure switch pump 1
+- `I4` = RPM switch pump 1
+- `I5` = Feedback pump 1
 - `I6` = Pressure switch pump 2
 - `I7` = RPM switch pump 2
-- `PB7` = `CONTACTOR_FB`
+- `I8` = Feedback pump 2
 - `PH0` = `ACK_LT1`
 - `AC1_IN` = pump 1 ready / remote available
 - `AC2_IN` = pump 2 ready / remote available
@@ -83,7 +84,7 @@ Switch wiring:
 
 - `PA10` and `PA11` use pull-up configuration and are active low
 - `ACK_LT1` on `PH0` uses pull-up configuration and is active low
-- `CONTACTOR_FB` on `PB7` is active low and is expected to use external pull-up hardware
+- `I3..I8` are active low and are expected to use external pull-up hardware
 - `AC1_IN` / `AC2_IN` are active low and are expected to use external pull-up hardware
 
 ## GPIO Notes
@@ -94,7 +95,7 @@ Important generated GPIO startup states:
 - `SR_OE` (`PA6`) starts high
 - `SEL_P1` and `SEL_P2` are configured with pull-ups and treated as active-low inputs
 - `ACK_LT1` on `PH0` is configured with pull-up and treated as an active-low input
-- `CONTACTOR_FB` on `PB7` is treated as an active-low input
+- `I3..I8` are treated as active-low inputs
 
 ## LED Mapping
 
@@ -150,11 +151,11 @@ Hardware validation is still required for:
 
 - Selector decode
 - ACK versus lamp test timing on `ACK_LT1`
-- contactor feedback behavior on `PB7`
+- pump feedback behavior on `I5` / `I8`
 - Shift register byte order on the real PCB
 - Relay and LED bit mapping on hardware
 - `AC1_IN` / `AC2_IN` ready behavior
-- pressure-timeout `Failure AMS` behavior
+- pressure-timeout standby alarm behavior
 - run/stop behavior from pressure and RPM inputs
 
 ## Bench Checklist
@@ -162,10 +163,11 @@ Hardware validation is still required for:
 - Verify `OFF / PUMP 1 / PUMP 2 / INVALID` selector decoding
 - Verify short press on `ACK_LT1` clears the latched alarm
 - Verify long press on `ACK_LT1` clears alarm and runs the grouped lamp test
-- Verify `CONTACTOR_FB` on `PB7` lights `Pump ON` indicators only when the commanded contactor closes
+- Verify `I5` lights `Pump 1 ON` only when Pump 1 is commanded and feedback is present
+- Verify `I8` lights `Pump 2 ON` only when Pump 2 is commanded and feedback is present
 - Verify `SR_OE` prevents relay glitching during shift register writes
 - Verify only one pump output can be active at a time
 - Verify pump starts on low pressure or inactive RPM only when the selected pump is ready
 - Verify pump stops only when pressure low clears and RPM is active
 - Verify alarm latch behavior for not-ready / invalid selector faults
-- Verify `Failure AMS` and `IND13 Standby alarm` only turn on after a `10 s` low-pressure timeout while the pump is running
+- Verify `IND13 Standby alarm` only turns on after a `10 s` low-pressure timeout while the pump is running
