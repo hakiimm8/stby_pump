@@ -353,8 +353,10 @@ static void ProcessInputs(void)
     DebounceBit(g_raw.pressure_p2_raw, &db_pressure_p2, &db_tick_pressure_p2, T_DEBOUNCE_MS);
     DebounceBit(g_raw.rpm_p2_raw, &db_rpm_p2, &db_tick_rpm_p2, T_DEBOUNCE_MS);
     DebounceBit(g_raw.fb_p2_raw, &db_fb_p2, &db_tick_fb_p2, T_DEBOUNCE_MS);
-    DebounceBit(g_raw.ac_p1_raw, &db_ac_p1, &db_tick_ac_p1, T_DEBOUNCE_MS);
-    DebounceBit(g_raw.ac_p2_raw, &db_ac_p2, &db_tick_ac_p2, T_DEBOUNCE_MS);
+    db_ac_p1 = g_raw.ac_p1_raw;
+    db_tick_ac_p1 = now;
+    db_ac_p2 = g_raw.ac_p2_raw;
+    db_tick_ac_p2 = now;
     DebounceBit(g_raw.sel_p1_raw, &db_sel_p1, &db_tick_sel_p1, T_DEBOUNCE_MS);
     DebounceBit(g_raw.sel_p2_raw, &db_sel_p2, &db_tick_sel_p2, T_DEBOUNCE_MS);
     DebounceBit(g_raw.ack_lt1_raw, &db_ack_lt1, &db_tick_ack_lt1, T_ACK_DEBOUNCE_MS);
