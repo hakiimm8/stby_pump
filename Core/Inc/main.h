@@ -85,8 +85,8 @@ void Error_Handler(void);
 #define I6_GPIO_Port GPIOB
 #define I7_Pin GPIO_PIN_6
 #define I7_GPIO_Port GPIOB
-#define ACK_LT_Pin GPIO_PIN_7
-#define ACK_LT_GPIO_Port GPIOB
+#define CONTACTOR_FB_Pin GPIO_PIN_7
+#define CONTACTOR_FB_GPIO_Port GPIOB
 #define AC1_IN_Pin GPIO_PIN_8
 #define AC1_IN_GPIO_Port GPIOB
 #define AC2_IN_Pin GPIO_PIN_9

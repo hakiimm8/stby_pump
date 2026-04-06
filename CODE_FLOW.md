@@ -63,12 +63,19 @@ The main loop then repeats continuously:
 
 ### ACK / Lamp Test
 
-- `ACK_LT` on `PB7` is active low
 - `ACK_LT1` on `PH0` is active low
-- Short press on either input = `ACK`
-- Long press on either input = `ACK + lamp test`
+- Short press = `ACK`
+- Long press = `ACK + lamp test`
 
 Current implementation performs ACK on the press edge. If the press is held long enough, lamp test is also enabled.
+
+### Contactor Feedback
+
+- `CONTACTOR_FB` on `PB7` is active low
+- it is a single shared feedback input from the pump contactor auxiliaries
+- the `Pump ON` indicators require both:
+  - the corresponding pump command
+  - and active contactor feedback
 
 ## Operating Modes
 
@@ -164,7 +171,7 @@ If no test input is active:
 
 - panel LEDs step through the indicator sequence one at a time
 
-If either ACK input is held active during output-test mode:
+If `ACK_LT1` is held active during output-test mode:
 
 - all relay outputs are forced off
 - panel LEDs switch to a grouped pattern test

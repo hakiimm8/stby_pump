@@ -39,8 +39,8 @@ These are currently treated as active low in `Core/Src/main.c`:
 
 - `SEL_P1`
 - `SEL_P2`
-- `ACK_LT`
 - `ACK_LT1`
+- `CONTACTOR_FB`
 - `AC1_IN`
 - `AC2_IN`
 - `IN Pressure switch pump 1`
@@ -59,8 +59,8 @@ Current polarity defines:
 - `RPM_ACTIVE_LEVEL = 0U`
 - `AC_ACTIVE_LEVEL = 0U`
 - `SELECTOR_ACTIVE_LEVEL = 0U`
-- `ACK_LT_ACTIVE_LEVEL = 0U`
 - `ACK_LT1_ACTIVE_LEVEL = 0U`
+- `CONTACTOR_FB_ACTIVE_LEVEL = 0U`
 
 ## Selector Wiring
 
@@ -80,13 +80,19 @@ GPIO assumptions:
 
 - `PA10`, `PA11` use pull-up configuration
 
-## ACK Inputs
+## ACK Input
 
-- `ACK_LT` on `PB7` is active low and uses external pull-up hardware
 - `ACK_LT1` on `PH0` is active low and uses internal pull-up
-- both inputs behave the same in firmware:
-  - short press = ACK
-  - long press = ACK + lamp test
+- short press = ACK
+- long press = ACK + lamp test
+
+## Contactor Feedback
+
+- `CONTACTOR_FB` on `PB7` is active low and uses external pull-up hardware
+- it is a single shared ORed feedback from the pump contactor auxiliaries
+- `Pump 1 ON` and `Pump 2 ON` indicators require:
+  - the corresponding pump command to be active
+  - and `CONTACTOR_FB` to be active
 
 ## DC / Pump IO Mapping
 
@@ -106,7 +112,7 @@ GPIO assumptions:
 - `I5` -> `PB4`
 - `I6` -> `PB5`
 - `I7` -> `PB6`
-- `ACK_LT` -> `PB7`
+- `CONTACTOR_FB` -> `PB7`
 - `ACK_LT1` -> `PH0`
 - `AC1_IN` -> `PB8`
 - `AC2_IN` -> `PB9`
@@ -210,7 +216,7 @@ Current logic meaning:
 
 - `System ready` = module powered and firmware running
 - `Pump ready` = `ACx_IN` ready input is active
-- `Pump ON` = pump command active
+- `Pump ON` = pump command active and contactor feedback active
 - `Pump standby` = in normal mode, opposite pump selected; in bypass mode, pump ready and not currently on
 - `Pressure low` = demand active
 - `Standby alarm` = same latched `10 s` pressure-timeout alarm as `Failure AMS`, blinking on the module indicator
@@ -234,8 +240,8 @@ Fault causes include:
 
 ACK/Lamp test behavior:
 
-- short press on either ACK input = ACK
-- long press on either ACK input = ACK + lamp test
+- short press on `ACK_LT1` = ACK
+- long press on `ACK_LT1` = ACK + lamp test
 
 ## Known Build Status
 

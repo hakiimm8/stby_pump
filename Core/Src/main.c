@@ -55,7 +55,7 @@ typedef struct
     uint8_t ac_p1_raw;
     uint8_t ac_p2_raw;
 
-    uint8_t ack_lt_raw;
+    uint8_t contactor_fb_raw;
     uint8_t ack_lt1_raw;
     uint8_t sel_p1_raw;
     uint8_t sel_p2_raw;
@@ -70,6 +70,7 @@ typedef struct
 
     uint8_t ac_p1;
     uint8_t ac_p2;
+    uint8_t contactor_fb;
 
     uint8_t ack_short;
     uint8_t lamp_test;
@@ -149,8 +150,8 @@ typedef struct
 #define PRESSURE_ACTIVE_LEVEL 0U
 #define RPM_ACTIVE_LEVEL 0U
 #define AC_ACTIVE_LEVEL 0U
+#define CONTACTOR_FB_ACTIVE_LEVEL 0U
 #define SELECTOR_ACTIVE_LEVEL 0U
-#define ACK_LT_ACTIVE_LEVEL 0U
 #define ACK_LT1_ACTIVE_LEVEL 0U
 
 /* Timing */
@@ -227,7 +228,7 @@ static uint8_t db_ac_p1 = 0;
 static uint8_t db_ac_p2 = 0;
 static uint8_t db_sel_p1 = 0;
 static uint8_t db_sel_p2 = 0;
-static uint8_t db_ack_lt = 0;
+static uint8_t db_contactor_fb = 0;
 static uint8_t db_ack_lt1 = 0;
 
 static uint32_t db_tick_pressure_p1 = 0;
@@ -238,7 +239,7 @@ static uint32_t db_tick_ac_p1 = 0;
 static uint32_t db_tick_ac_p2 = 0;
 static uint32_t db_tick_sel_p1 = 0;
 static uint32_t db_tick_sel_p2 = 0;
-static uint32_t db_tick_ack_lt = 0;
+static uint32_t db_tick_contactor_fb = 0;
 static uint32_t db_tick_ack_lt1 = 0;
 
 /* USER CODE END PV */
@@ -340,7 +341,7 @@ static void ReadRawInputs(void)
        I5 = RPM switch Pump 1
        I6 = Pressure switch Pump 2
        I7 = RPM switch Pump 2
-       I8 = ACK / Lamp Test
+       I8 = Contactor feedback
     */
 
     g_raw.pressure_p1_raw = PIN_IS_ACTIVE(I4_GPIO_Port, I4_Pin);
@@ -352,7 +353,7 @@ static void ReadRawInputs(void)
     g_raw.ac_p1_raw = PIN_IS_ACTIVE(AC1_IN_GPIO_Port, AC1_IN_Pin);
     g_raw.ac_p2_raw = PIN_IS_ACTIVE(AC2_IN_GPIO_Port, AC2_IN_Pin);
 
-    g_raw.ack_lt_raw = PIN_IS_ACTIVE(ACK_LT_GPIO_Port, ACK_LT_Pin);
+    g_raw.contactor_fb_raw = PIN_IS_ACTIVE(CONTACTOR_FB_GPIO_Port, CONTACTOR_FB_Pin);
     g_raw.ack_lt1_raw = PIN_IS_ACTIVE(ACK_LT1_GPIO_Port, ACK_LT1_Pin);
     g_raw.sel_p1_raw = PIN_IS_ACTIVE(SEL_P1_GPIO_Port, SEL_P1_Pin);
     g_raw.sel_p2_raw = PIN_IS_ACTIVE(SEL_P2_GPIO_Port, SEL_P2_Pin);
@@ -370,7 +371,7 @@ static void ProcessInputs(void)
     DebounceBit(g_raw.ac_p2_raw, &db_ac_p2, &db_tick_ac_p2, T_DEBOUNCE_MS);
     DebounceBit(g_raw.sel_p1_raw, &db_sel_p1, &db_tick_sel_p1, T_DEBOUNCE_MS);
     DebounceBit(g_raw.sel_p2_raw, &db_sel_p2, &db_tick_sel_p2, T_DEBOUNCE_MS);
-    DebounceBit(g_raw.ack_lt_raw, &db_ack_lt, &db_tick_ack_lt, T_ACK_DEBOUNCE_MS);
+    DebounceBit(g_raw.contactor_fb_raw, &db_contactor_fb, &db_tick_contactor_fb, T_DEBOUNCE_MS);
     DebounceBit(g_raw.ack_lt1_raw, &db_ack_lt1, &db_tick_ack_lt1, T_ACK_DEBOUNCE_MS);
 
     g_in.pressure_p1 = NormalizeLevel(db_pressure_p1, PRESSURE_ACTIVE_LEVEL);
@@ -380,6 +381,7 @@ static void ProcessInputs(void)
 
     g_in.ac_p1 = NormalizeLevel(db_ac_p1, AC_ACTIVE_LEVEL);
     g_in.ac_p2 = NormalizeLevel(db_ac_p2, AC_ACTIVE_LEVEL);
+    g_in.contactor_fb = NormalizeLevel(db_contactor_fb, CONTACTOR_FB_ACTIVE_LEVEL);
 
     {
         uint8_t sel1 = NormalizeLevel(db_sel_p1, SELECTOR_ACTIVE_LEVEL);
@@ -399,9 +401,8 @@ static void ProcessInputs(void)
     g_in.lamp_test = 0U;
 
     {
-        uint8_t ack_remote_now = NormalizeLevel(db_ack_lt, ACK_LT_ACTIVE_LEVEL);
         uint8_t ack_local_now = NormalizeLevel(db_ack_lt1, ACK_LT1_ACTIVE_LEVEL);
-        uint8_t ack_any_now = (uint8_t)(ack_remote_now || ack_local_now);
+        uint8_t ack_any_now = ack_local_now;
 
         if ((ack_any_now == 1U) && (g_last_ack_raw == 0U))
         {
@@ -526,7 +527,7 @@ static void PrimeDebouncedInputs(void)
     db_ac_p2 = g_raw.ac_p2_raw;
     db_sel_p1 = g_raw.sel_p1_raw;
     db_sel_p2 = g_raw.sel_p2_raw;
-    db_ack_lt = g_raw.ack_lt_raw;
+    db_contactor_fb = g_raw.contactor_fb_raw;
     db_ack_lt1 = g_raw.ack_lt1_raw;
 
     db_tick_pressure_p1 = now;
@@ -537,7 +538,7 @@ static void PrimeDebouncedInputs(void)
     db_tick_ac_p2 = now;
     db_tick_sel_p1 = now;
     db_tick_sel_p2 = now;
-    db_tick_ack_lt = now;
+    db_tick_contactor_fb = now;
     db_tick_ack_lt1 = now;
 }
 
@@ -1187,8 +1188,7 @@ static void ApplyLampTestGroupToLedBytes(uint8_t group, uint8_t *led_byte_1, uin
 static void RunOutputTestProgram(void)
 {
     uint32_t now = HAL_GetTick();
-    uint8_t ack_active = (uint8_t)(NormalizeLevel(db_ack_lt, ACK_LT_ACTIVE_LEVEL) ||
-                                   NormalizeLevel(db_ack_lt1, ACK_LT1_ACTIVE_LEVEL));
+    uint8_t ack_active = NormalizeLevel(db_ack_lt1, ACK_LT1_ACTIVE_LEVEL);
 
     g_test_sys_led1 = 0U;
     g_test_sys_led2 = 0U;
@@ -1331,14 +1331,14 @@ static MAYBE_UNUSED void RunNormalModeSection(void)
 
     g_out.ind1_system_ready = 1U;
     g_out.ind2_p1_ready = P1Ready();
-    g_out.ind3_p1_on = g_out.pump1_cmd;
+    g_out.ind3_p1_on = (uint8_t)(g_out.pump1_cmd && g_in.contactor_fb);
 #if (APP_MODE == APP_MODE_DUAL_PUMP_CFG)
     g_out.ind4_p1_standby = (g_in.selector == SELECTOR_P2) ? 1U : 0U;
 #else
     g_out.ind4_p1_standby = 0U;
 #endif
     g_out.ind5_p2_ready = P2Ready();
-    g_out.ind6_p2_on = g_out.pump2_cmd;
+    g_out.ind6_p2_on = (uint8_t)(g_out.pump2_cmd && g_in.contactor_fb);
 #if (APP_MODE == APP_MODE_DUAL_PUMP_CFG)
     g_out.ind7_p2_standby = (g_in.selector == SELECTOR_P1) ? 1U : 0U;
 #else
@@ -1403,10 +1403,10 @@ static MAYBE_UNUSED void RunBypassModeSection(void)
     g_alarm_latched = (bypass_latched_mask != 0U) ? 1U : 0U;
     g_out.ind1_system_ready = 1U;
     g_out.ind2_p1_ready = g_in.ac_p1;
-    g_out.ind3_p1_on = g_out.pump1_cmd;
+    g_out.ind3_p1_on = (uint8_t)(g_out.pump1_cmd && g_in.contactor_fb);
     g_out.ind4_p1_standby = (uint8_t)(g_in.ac_p1 && !g_out.pump1_cmd);
     g_out.ind5_p2_ready = g_in.ac_p2;
-    g_out.ind6_p2_on = g_out.pump2_cmd;
+    g_out.ind6_p2_on = (uint8_t)(g_out.pump2_cmd && g_in.contactor_fb);
     g_out.ind7_p2_standby = (uint8_t)(g_in.ac_p2 && !g_out.pump2_cmd);
     g_out.ind8_pressure_low = (uint8_t)(g_in.pressure_p1 || g_in.pressure_p2);
     g_out.ind9_standby_alarm =
@@ -1709,9 +1709,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(I3_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : I4_Pin I5_Pin I6_Pin I7_Pin
-                           ACK_LT_Pin AC1_IN_Pin AC2_IN_Pin */
+                           CONTACTOR_FB_Pin AC1_IN_Pin AC2_IN_Pin */
   GPIO_InitStruct.Pin = I4_Pin|I5_Pin|I6_Pin|I7_Pin
-                          |ACK_LT_Pin|AC1_IN_Pin|AC2_IN_Pin;
+                          |CONTACTOR_FB_Pin|AC1_IN_Pin|AC2_IN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
