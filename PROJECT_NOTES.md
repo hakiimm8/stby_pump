@@ -231,12 +231,16 @@ Current logic meaning:
 
 ## State Machine Notes
 
-`AUTO` mode rules for the selected pump:
+`AUTO` mode rules:
 
-1. run request exists when `pressure_low` is active or `rpm` is inactive
-2. pump may run only if `ACx_IN` for that pump is active
-3. if run is requested while the selected pump is not ready, alarm latches and the pump stays off
-4. pump stops only when `pressure_low` is inactive and `rpm` is active
+1. run request exists when the selected pump sees `pressure_low` active or `rpm` inactive
+2. the selected pump is primary and the other pump is secondary
+3. on demand, the controller tries the primary pump first if it is ready
+4. if the primary has no feedback after `3 s`, the controller tries the secondary pump if it is ready
+5. if both available pumps fail feedback, outputs turn off and alarm latches
+6. `AC` not ready is skip-only, not a fault
+7. selector `OFF` or `INVALID` stops the automatic controller with no alarm
+8. ACK from alarm resets the controller to a fresh `OFF` state
 
 `MANUAL` mode rules:
 
@@ -248,14 +252,9 @@ Current logic meaning:
 
 Common fault rule:
 
-1. in `AUTO`, if a commanded pump still has no feedback after `3 s`, the pump stops and the alarm latches
-2. if the matching feedback later appears, that feedback-timeout latch clears automatically
-3. ACK clears the latched alarm and returns the module to normal operation again
-
-Fault causes include:
-
-- run requested while selected pump is not ready
-- invalid selector state
+1. in `AUTO`, the feedback-timeout fault is only latched after all available pumps have failed feedback
+2. alarm does not auto-clear from feedback returning later
+3. ACK clears the latched alarm and returns the module to a fresh start
 
 ACK/Lamp test behavior:
 

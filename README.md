@@ -14,9 +14,9 @@ In dual-pump builds:
 
 - The operator selects `OFF`, `PUMP 1`, or `PUMP 2`
 - Only one pump may run at a time
-- There is no automatic transfer
-- A fault latches the panel alarm
-- The operator must acknowledge the alarm and manually select another pump if needed
+- `AUTO` tries the selected pump first, then automatically tries the other pump if feedback fails
+- Alarm latches only after all available pumps have failed feedback
+- ACK resets the automatic controller and lets it start fresh
 
 The current source is configured for dual pump mode in [`Core/Src/main.c`](Core/Src/main.c).
 
@@ -30,12 +30,15 @@ Current control logic in `Core/Src/main.c` uses these meanings:
 
 For the selected pump:
 
-In `AUTO` mode for the selected pump:
+In `AUTO` mode:
 
-1. A pump run request exists when `pressure_low` is active or `rpm` is inactive
-2. The selected pump may run only if its `ACx_IN` ready input is active
-3. If a run request exists while the selected pump is not ready, alarm latches and the pump stays off
-4. The standby pump stops only when pressure low is inactive and RPM is active
+1. A run request exists when the selected pump sees `pressure_low` active or `rpm` inactive
+2. The selected pump is the primary pump; the other pump is the secondary pump
+3. On demand, the controller tries the primary pump first if it is ready
+4. If the primary has no feedback after `3 s`, the controller tries the secondary pump if it is ready
+5. If all available pumps fail feedback, both outputs turn off and alarm latches
+6. `ACx_IN` not ready is never a fault; that pump is simply skipped
+7. Selector `OFF` or `INVALID` stops the automatic controller without alarm
 
 In `MANUAL` mode:
 
@@ -48,8 +51,8 @@ In `MANUAL` mode:
 Common behavior:
 
 1. `System ready` means the module is powered and running
-2. In `AUTO`, if a commanded pump still has no matching feedback after `3 s`, the controller stops the pump and latches alarm
-3. `IND13 Standby alarm` follows that latched `3 s` no-feedback alarm in `AUTO`
+2. In `AUTO`, `IND13 Standby alarm` follows the latched `3 s` no-feedback alarm
+3. `Pump 1 ON` and `Pump 2 ON` always follow live feedback, even if the module output is off
 
 ## Alarm / ACK / Lamp Test
 
@@ -181,8 +184,8 @@ Hardware validation is still required for:
 - Verify `Pump 2 ON` follows Pump 2 feedback, including local running
 - Verify `SR_OE` prevents relay glitching during shift register writes
 - Verify only one pump output can be active at a time in `AUTO`
-- Verify `AUTO` starts on low pressure or inactive RPM only when the selected pump is ready
-- Verify `AUTO` stops only when pressure low clears and RPM is active
+- Verify `AUTO` tries the selected pump first, then fails over to the other ready pump on feedback loss/timeout
+- Verify `AUTO` stays off without alarm when demand exists but neither pump is ready
 - Verify `MANUAL` follows selector directly regardless of pressure / RPM / AC / feedback
-- Verify alarm latch behavior for not-ready / invalid selector faults in `AUTO`
-- Verify `IND13 Standby alarm` only turns on after `3 s` of missing feedback while the pump is commanded on
+- Verify `IND13 Standby alarm` only turns on after all available pumps have failed feedback in `AUTO`
+- Verify ACK from `AUTO` alarm resets the controller and starts a fresh cycle

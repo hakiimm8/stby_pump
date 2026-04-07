@@ -84,11 +84,11 @@ This is the current default mode.
 
 ### Pump selection
 
-- The selector chooses which pump path is allowed to operate
+- The selector chooses the primary pump in `AUTO`
 - `OFF` means no pump should run
-- `PUMP 1` allows only pump 1
-- `PUMP 2` allows only pump 2
-- `INVALID` is treated as a fault condition
+- `PUMP 1` means Pump 1 is primary and Pump 2 is secondary
+- `PUMP 2` means Pump 2 is primary and Pump 1 is secondary
+- `INVALID` is treated the same as `OFF`
 
 ### Run request
 
@@ -99,33 +99,15 @@ For the selected pump, a run request exists when either of these is true:
 
 This means the standby pump may be requested either because pressure is low, or because the engine still cannot support itself.
 
-### Run permission
+### Failover behavior
 
-Even when there is a run request, the selected pump is only allowed to run if its AC ready input is active.
-
-So:
-
-- demand present + AC ready = pump may run
-- demand present + AC not ready = pump stays off
-
-### Stop condition
-
-The selected pump stops only when both of these are true:
-
-- pressure low is no longer active
-- RPM is active
-
-If RPM becomes active while pressure is still low, the standby pump continues to run.
-
-### Selector change during operation
-
-If the selector changes away from the currently active pump while the controller is running:
-
-- the running pump is stopped
-- the state returns to `OFF`
-- there is no automatic transfer
-
-The operator must deliberately choose the desired pump.
+- On demand, `AUTO` tries the selected primary pump first if it is ready
+- If the primary has no feedback after `3 s`, `AUTO` tries the secondary pump if it is ready
+- If the secondary also fails feedback, the controller enters `ALARM`
+- `AC` not ready is never a fault; that pump is just skipped
+- If neither pump is ready, the controller stays `OFF` with no alarm
+- If selector changes while `AUTO` is trying or running a pump, the controller returns to `OFF`
+- If demand disappears while `AUTO` is trying or running a pump, the controller returns to `OFF`
 
 ## MANUAL Mode
 
@@ -134,7 +116,7 @@ This mode uses the selector as a direct output command.
 - selector `OFF` = both pumps off
 - selector `PUMP 1` = Pump 1 forced on
 - selector `PUMP 2` = Pump 2 forced on
-- selector `INVALID` = fault
+- selector `INVALID` = outputs off
 
 In manual mode:
 
@@ -189,20 +171,16 @@ There are currently two different alarm concepts in the firmware:
 
 This is the main latched alarm state used for system health.
 
-It can be caused by:
-
-- invalid selector in `AUTO`
-- in `AUTO`, demand exists while the selected pump is not ready
-- feedback-timeout fault in `AUTO`
+It is caused only by feedback failure in `AUTO` after all available pumps have failed.
 
 This alarm affects:
 
 - internal alarm state
 - ACK handling
 
-### Pressure-timeout alarm
+### Feedback-timeout alarm
 
-This is the specific alarm that drives:
+This is the alarm that drives:
 
 - `Standby alarm` indicator
 
@@ -212,42 +190,18 @@ It is a subset of the general alarm behavior.
 
 This is the current `AUTO` rule for the latched `Standby alarm`:
 
-1. A pump starts running
-2. The firmware begins counting from the pump run start time
-3. If matching pump feedback is still missing after `3 s`, a feedback-timeout fault occurs
-4. The pump is turned off
-5. The alarm is latched
-6. `Standby alarm` blinks on the module front panel
-
-This timeout is checked from pump command start, not from a separate background timer.
-
-If feedback appears before the `3 s` expires:
-
-- the feedback-timeout fault does not occur
-
-If feedback appears after the fault has latched:
-
-- the feedback-timeout latch clears automatically
-- `Standby alarm` turns off
-- the controller can return to normal operation without `ACK`
-
-If the pump is not allowed to start because AC ready is absent:
-
-- the low-pressure indicator still works normally
-- the pump stays off
-- no extra relay output turns on from that condition alone
+1. Demand exists for the selected primary pump
+2. The controller tries the primary if ready, otherwise it may skip straight to the secondary if ready
+3. Each attempted pump gets `3 s` to produce matching feedback
+4. If one pump fails and the other ready pump is available, the controller fails over automatically
+5. If all available pumps fail feedback, both outputs turn off
+6. `Standby alarm` then blinks on the module front panel and stays latched until `ACK`
 
 ## ACK Behavior
 
-ACK clears the latched alarm state.
+ACK clears the latched `AUTO` alarm and resets the controller to a fresh `OFF` state.
 
-For the `AUTO` feedback-timeout case specifically:
-
-- ACK still clears the latched timeout alarm manually
-- `Standby alarm` turns off
-- the module returns to normal operation again
-
-After ACK, if demand still exists and the selected pump is ready, the system is allowed to start the pump again as a fresh cycle.
+After ACK, if demand still exists, the controller starts again from the primary/secondary decision with no remembered failures.
 
 This also means the `3 s` timeout starts again from the new pump start, not from the old failed attempt.
 
@@ -333,8 +287,7 @@ The current firmware behaves as a selector-driven standby pump controller with t
 - in `AUTO`, demand comes from pressure low or RPM inactive
 - in `MANUAL`, selector directly forces the pump output
 - in `MANUAL`, feedback is ignored completely
-- a selected pump can only run if its AC ready input is active
-- the pump stops when pressure low clears and RPM is active
-- invalid selector and not-ready demand latch the general alarm
-- `Standby alarm` is reserved specifically for the `3 s` no-feedback failure after a pump has been commanded on
-- ACK returns the controller to normal operation again
+- in `AUTO`, the selected pump is tried first and the other pump is automatic failover
+- `AC` not ready only causes a pump to be skipped
+- `Standby alarm` is reserved specifically for the latched `3 s` feedback failures after all available pumps have been tried
+- ACK resets `AUTO` and starts a fresh cycle
