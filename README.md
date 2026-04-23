@@ -101,7 +101,8 @@ Switch wiring:
 
 - `PA10` and `PA11` use pull-up configuration and are active low
 - `ACK_LT1` on `PH0` uses pull-up configuration and is active low
-- `I3..I8` are active low and are expected to use external pull-up hardware
+- `I3`, `I5`, `I6`, and `I8` are active low and are expected to use external pull-up hardware
+- `I4` and `I7` use external pull-up hardware and are treated as active-high RPM inputs in firmware
 - `AC1_IN` / `AC2_IN` are active low and are expected to use external pull-up hardware
 
 ## GPIO Notes
@@ -112,7 +113,8 @@ Important generated GPIO startup states:
 - `SR_OE` (`PA6`) starts high
 - `SEL_P1` and `SEL_P2` are configured with pull-ups and treated as active-low inputs
 - `ACK_LT1` on `PH0` is configured with pull-up and treated as an active-low input
-- `I3..I8` are treated as active-low inputs
+- `I3`, `I5`, `I6`, and `I8` are treated as active-low inputs
+- `I4` and `I7` are treated as active-high RPM inputs with `2 s` debounce in firmware
 
 ## LED Mapping
 

@@ -42,27 +42,38 @@ These are currently treated as active low in `Core/Src/main.c`:
 - `SEL_P2`
 - `ACK_LT1`
 - `I3`
-- `I4`
 - `I5`
 - `I6`
-- `I7`
 - `I8`
 - `AC1_IN`
 - `AC2_IN`
 - `IN Pressure switch pump 1`
-- `IN RPM switch pump 1`
 - `IN Pressure switch pump 2`
+
+Reason:
+
+- ACK and pressure inputs use pull-up resistors
+- active state is the low state
+
+### Active high inputs
+
+These are currently treated as active high in `Core/Src/main.c`:
+
+- `I4`
+- `I7`
+- `IN RPM switch pump 1`
 - `IN RPM switch pump 2`
 
 Reason:
 
-- ACK, pressure, and RPM inputs use pull-up resistors
-- active state is the low state
+- RPM inputs use external pull-up hardware
+- firmware treats the high state as active
+- RPM input debounce is `2 s` using `T_RPM_DEBOUNCE_MS`
 
 Current polarity defines:
 
 - `PRESSURE_ACTIVE_LEVEL = 0U`
-- `RPM_ACTIVE_LEVEL = 0U`
+- `RPM_ACTIVE_LEVEL = 1U`
 - `AC_ACTIVE_LEVEL = 0U`
 - `SELECTOR_ACTIVE_LEVEL = 0U`
 - `ACK_LT1_ACTIVE_LEVEL = 0U`

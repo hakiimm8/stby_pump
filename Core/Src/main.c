@@ -143,7 +143,7 @@ typedef struct
 
 /* Input polarities: set 1 if active high, 0 if active low */
 #define PRESSURE_ACTIVE_LEVEL 0U
-#define RPM_ACTIVE_LEVEL 0U
+#define RPM_ACTIVE_LEVEL 1U
 #define AC_ACTIVE_LEVEL 0U
 #define FEEDBACK_ACTIVE_LEVEL 0U
 #define SELECTOR_ACTIVE_LEVEL 0U
@@ -152,6 +152,7 @@ typedef struct
 /* Timing */
 #define LOOP_DELAY_MS 20U
 #define T_DEBOUNCE_MS 200U
+#define T_RPM_DEBOUNCE_MS 2000U
 #define T_ACK_DEBOUNCE_MS 50U
 #define T_ACK_LONGPRESS_MS 1500U
 #define T_BLINK_MS 500U
@@ -347,10 +348,10 @@ static void ProcessInputs(void)
     uint32_t now = HAL_GetTick();
 
     DebounceBit(g_raw.pressure_p1_raw, &db_pressure_p1, &db_tick_pressure_p1, T_DEBOUNCE_MS);
-    DebounceBit(g_raw.rpm_p1_raw, &db_rpm_p1, &db_tick_rpm_p1, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.rpm_p1_raw, &db_rpm_p1, &db_tick_rpm_p1, T_RPM_DEBOUNCE_MS);
     DebounceBit(g_raw.fb_p1_raw, &db_fb_p1, &db_tick_fb_p1, T_DEBOUNCE_MS);
     DebounceBit(g_raw.pressure_p2_raw, &db_pressure_p2, &db_tick_pressure_p2, T_DEBOUNCE_MS);
-    DebounceBit(g_raw.rpm_p2_raw, &db_rpm_p2, &db_tick_rpm_p2, T_DEBOUNCE_MS);
+    DebounceBit(g_raw.rpm_p2_raw, &db_rpm_p2, &db_tick_rpm_p2, T_RPM_DEBOUNCE_MS);
     DebounceBit(g_raw.fb_p2_raw, &db_fb_p2, &db_tick_fb_p2, T_DEBOUNCE_MS);
     db_ac_p1 = g_raw.ac_p1_raw;
     db_tick_ac_p1 = now;

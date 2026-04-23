@@ -51,7 +51,9 @@ The main loop then repeats continuously:
 
 ### RPM
 
-- RPM inputs are active low electrically
+- RPM inputs are treated as active high in firmware
+- `I4` and `I7` use external pull-up hardware
+- RPM input debounce is `2 s` using `T_RPM_DEBOUNCE_MS`
 - After normalization, `rpm active` means the engine can support itself using its own pump
 - RPM is not used as proof that the standby pump itself is rotating
 
